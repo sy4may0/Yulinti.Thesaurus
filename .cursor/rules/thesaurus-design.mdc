@@ -83,7 +83,7 @@ JSONファイルの目次を管理する。
 
 - LuditorDataServandaの公開IF
 - メソッド:
-  - `Guid LegoNovissimus()` - 最新Revisionのguidを取得
+  - `Guid? LegoNovissimus()` - 最新Revisionのguidを取得
   - `Task<IDataServanda<T>> Arcessere(Guid guid)` - 指定guidのデータを取得
   - `Task<Guid> Servare(T dataDTO)` - 新規ファイル作成してデータ保存
   - `Task<Guid> Servare(Guid guid, T dataDTO)` - 既存ファイルにデータ保存

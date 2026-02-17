@@ -216,5 +216,9 @@ namespace Yulinti.Thesaurus {
                 _indexServandaDto.Automaticus.Remove(guid);
             }
         }
+
+        public Guid? LegoNovissimus() {
+            return _indexServandaDto.Novissimus?.Guid;
+        }
     }
 }
