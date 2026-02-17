@@ -1,0 +1,148 @@
+---
+description: Thesaurus JSON シリアライゼーションシステムの設計仕様
+alwaysApply: true
+---
+
+# Thesaurus 設計仕様
+
+このプロジェクトは、シリアライズ可能なクラスをJSONファイルに書き出すシステムです。
+
+## ルール
+
+- このクラスはランタイムにnewとかList.Addをやっていい。やらないと死んでしまう。
+- GUID文字列は RFC 4122 の canonical
+- クラス内の日時はDateTimeを使う。
+- 各種ファイルパスはindex.jsonがあるディレクトリ相対パスで扱う。
+- index.jsonのパスのみ絶対パスで、引数で受け取る。
+- unixtimeは秒までを取り扱う。ミリ秒は含めない。
+
+## JSON設計
+
+### index.json
+
+JSONファイルの目次を管理する。
+
+```json
+{
+    "revisio_proximus": <long>,
+    "versio": <int>,
+    "manualis": {
+        <string/guid>: {
+            "revisio": <long>,
+            "timestamp": <string/datetime>,
+            "path": <string>
+        }
+    },
+    "ordo_manualis": [<string/guid>, ...],
+    "automaticus": {
+        <string/guid>: {
+            "revisio": <long>,
+            "timestamp": <string/datetime>,
+            "path": <string>
+        }
+    },
+    "ordo_automaticus": [<string/guid>, ...],
+    "novissimus": {
+        "methodus": <string(manualis|automaticus)>,
+        "guid": <string/guid>,
+        "revisio": <long>,
+        "timestamp": <string/datetime>
+    }
+}
+```
+
+**パラメータ説明:**
+
+| key | 説明 |
+|-----|------|
+| revisio_proximus | 現在のRevision。保存された最大Revision+1の値 |
+| versio | JSONのバージョン |
+| manualis | 手動保存したデータを管理 |
+| ordo_manualis | 手動保存データのキー配列 |
+| automaticus | 自動保存されたデータを管理 |
+| ordo_automaticus | 自動保存データのキー配列 |
+| novissimus | 最後に保存されたデータを管理 |
+| guid | データのGUID |
+| revisio | データのリビジョン/全体で1つのカウンタを使う |
+| timestamp | stringでタイムスタンプを保持（updated_at） |
+| path | データのJSONファイルパス |
+
+### データJSON
+
+- ファイル名はguidとする
+- 内容は投入するDTOクラスに依存する
+
+## Interface設計
+
+### public Yulinti.Thesaurus.IDataServanda<T>
+
+- DataServandaの公開IF
+- 必要な値だけアクセス可能: `Guid`, `Revisio`, `Timestamp`, `Data`
+
+### public Yulinti.Thesaurus.ILuditorDataServanda<T>
+
+- LuditorDataServandaの公開IF
+- メソッド:
+  - `Guid LegoNovissimus()` - 最新Revisionのguidを取得
+  - `Task<IDataServanda<T>> Arcessere(Guid guid)` - 指定guidのデータを取得
+  - `Task Servare(T dataDTO)` - 新規ファイル作成してデータ保存
+  - `Task Servare(Guid guid, T dataDTO)` - 既存ファイルにデータ保存
+  - `Task Deleto(Guid guid)` - 既存ファイルを削除
+  - `IReadOnlyList<Guid> TabulaManualis()`, `IReadOnlyList<Guid> TabulaAutomaticus()` - guidリスト取得
+
+## DTOクラス設計
+
+### internal Yulinti.Thesaurus.IndexServandaDto
+
+- `index.json`全体のDTO
+
+### internal Yulinti.Thesaurus.DataServandaDto
+
+- `manualis`および`automaticus`辞書内の構造のDTO
+
+### internal Yulinti.Thesaurus.NovissimusServandaDto
+
+- `novissimus`のDTO
+
+### internal Yulinti.Thesaurus.DataServanda<T>
+
+- 外部に公開するデータクラス
+- パラメータ: `guid`、`DataServanda`、`T data`
+
+## ロジッククラス設計
+
+### internal Yulinti.Thesaurus.Scriba
+
+ファイル書き込み/読み込みを行うクラス。
+
+- stringを受け取りファイル書き込みを行う（Async）
+- ファイルを読み込みstringを返す（Async）
+
+### internal Yulinti.Thesaurus.LuditorDataServanda<T>
+
+DataServandaの書き込み/読み込みを行う。
+
+- コンストラクタの引数はデータディレクトリのパスのみ
+- コンストラクタでindex.jsonを読み込み、normalizeを実行（`void Normare()`）
+- 自身でIndexServandaを保持し、各関数で状態が変われば更新
+- (W)がついているメソッドはindex.jsonの更新を行う（`Task ServareIndex()`）
+
+### Normare() - ノーマライズ処理
+
+**Phase0: バージョンチェック/マイグレーション**
+- 未実装（将来のマイグレーション用）
+
+**Phase1: 不整合データの除去**
+- pathのexistsをチェック。存在しなければエントリを除去
+- guidの重複をチェック。重複している場合はtimestampが古いエントリを削除
+- revisioの重複をチェック。重複している場合はtimestampが古いエントリを削除
+
+**Phase2: 関係を確定**
+- revisio_proximusを確定（全データから最大revisioを計算）
+- ordoを確定（manualis, automaticusのDictからListを再構成）
+- revisio_proximus-1からnovissimusを確定
+
+### public static Yulinti.Thesaurus.FabricaLuditorDataServandais
+
+- ILuditorDataServandaを外から初期化するためのstaticクラス
+- メソッド: `ILuditorDataServanda<T> Fabricare<T>(string dirPath)` - LuditorDataServandaを初期化
