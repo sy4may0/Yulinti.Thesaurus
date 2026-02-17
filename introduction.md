@@ -96,8 +96,9 @@ JSONファイルの目次を管理する。
 - Luditorの公開IF
 - 最新Revisionのguidを取得する。(`string LegoNovissimus()`)
 - (Async)指定guidのデータを取得する。(`Task<Arcessere<T>(string guid)`)
-- (Async)新規にファイルを作成してデータを保存する。(`Task Servare(T dataDTO)`)
-- (Async)既存のファイルにデータを保存する。(`Task Servare(string guid, T dataDTO)`)
+- (Async)新規にファイルを作成してデータを保存する。(`Task<Guid> Servare(T dataDTO)`)
+- (Async)Automaticusにデータを保存する。(`Task<Guid> ServareAutomaticus(T dataDTO)`)
+- (Async)既存のファイルにデータを保存する。(`Task<Guid> Servare(string guid, T dataDTO)`)
 - (Async)既存のファイルを削除する。(`Task Deleto(string guid)`)
 - guidのリストを取得する。(`string[] TabulaManualis(), string[] TabulaAutomaticus()`)
 

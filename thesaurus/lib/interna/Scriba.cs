@@ -22,5 +22,22 @@ namespace Yulinti.Thesaurus {
 
             return await File.ReadAllTextAsync(path, Encoding.UTF8);
         }
+
+        public string ScribereSync(string path, string content) {
+            if (!File.Exists(path)) {
+                throw new FileNotFoundException($"File not found: {path}");
+            }
+
+            File.WriteAllText(path, content, Encoding.UTF8);
+            return content;
+        }
+        
+        public string LegereSync(string path) {
+            if (!File.Exists(path)) {
+                throw new FileNotFoundException($"File not found: {path}");
+            }
+
+            return File.ReadAllText(path, Encoding.UTF8);
+        }
     }
 }

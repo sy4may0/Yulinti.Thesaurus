@@ -24,7 +24,17 @@ namespace Yulinti.Thesaurus {
         public List<Guid> OrdoAutomaticus { get; set; } = null!;
         
         [JsonPropertyName("novissimus")]
-        public NovissimusServandaDto Novissimus { get; set; } = null!;
+        public NovissimusServandaDto? Novissimus { get; set; }
+
+        public IndexServandaDto() {
+            RevisioProximus = 0;
+            Versio = 0;
+            Manualis = new Dictionary<Guid, DataServandaDto>();
+            OrdoManualis = new List<Guid>();
+            Automaticus = new Dictionary<Guid, DataServandaDto>();
+            OrdoAutomaticus = new List<Guid>();
+            Novissimus = null;
+        }
     }
 
     internal class DataServandaDto {
