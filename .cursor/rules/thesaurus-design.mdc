@@ -83,13 +83,14 @@ JSONファイルの目次を管理する。
 
 - LuditorDataServandaの公開IF
 - メソッド:
-  - `Guid? LegoNovissimus()` - 最新Revisionのguidを取得
+  - `Task<Guid?> LegoNovissimus()` - 最新Revisionのguidを取得
   - `Task<IDataServanda<T>> Arcessere(Guid guid)` - 指定guidのデータを取得
-  - `Task<Guid> Servare(T dataDTO)` - 新規ファイル作成してデータ保存
+  - `Task<Guid> CreareManualis(T dataDTO)` - 新規ファイル作成してデータ保存
+  - `Task<Guid> CreareAutomatics(T dataDTO)` - Automaticusにデータを保存
   - `Task<Guid> Servare(Guid guid, T dataDTO)` - 既存ファイルにデータ保存
-  - `Task<Guid> ServareAutomatics(T dataDTO)` - Automaticusにデータを保存
   - `Task Deleto(Guid guid)` - 既存ファイルを削除
-  - `IReadOnlyList<Guid> TabulaManualis()`, `IReadOnlyList<Guid> TabulaAutomaticus()` - guidリスト取得
+  - `Task<IReadOnlyList<Guid>> TabulaManualis()`, `Task<IReadOnlyList<Guid>> TabulaAutomaticus()` - guidリスト取得
+- (注意)公開IFはSemaphoreを使いロックするため、すべてasyncとする。
 
 ## DTOクラス設計
 

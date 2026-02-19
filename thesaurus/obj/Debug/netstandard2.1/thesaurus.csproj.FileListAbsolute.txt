@@ -8,3 +8,14 @@
 /work/obj/Debug/netstandard2.1/thesaurus.dll
 /work/obj/Debug/netstandard2.1/thesaurus.pdb
 /work/obj/Debug/netstandard2.1/thesaurus.csproj.AssemblyReference.cache
+/work/thesaurus/bin/Debug/netstandard2.1/thesaurus.deps.json
+/work/thesaurus/bin/Debug/netstandard2.1/thesaurus.dll
+/work/thesaurus/bin/Debug/netstandard2.1/thesaurus.pdb
+/work/thesaurus/obj/Debug/netstandard2.1/thesaurus.csproj.AssemblyReference.cache
+/work/thesaurus/obj/Debug/netstandard2.1/thesaurus.GeneratedMSBuildEditorConfig.editorconfig
+/work/thesaurus/obj/Debug/netstandard2.1/thesaurus.AssemblyInfoInputs.cache
+/work/thesaurus/obj/Debug/netstandard2.1/thesaurus.AssemblyInfo.cs
+/work/thesaurus/obj/Debug/netstandard2.1/thesaurus.csproj.CoreCompileInputs.cache
+/work/thesaurus/obj/Debug/netstandard2.1/thesaurus.sourcelink.json
+/work/thesaurus/obj/Debug/netstandard2.1/thesaurus.dll
+/work/thesaurus/obj/Debug/netstandard2.1/thesaurus.pdb

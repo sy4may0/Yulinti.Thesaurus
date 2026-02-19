@@ -4,13 +4,13 @@ using System.Threading.Tasks;
 
 namespace Yulinti.Thesaurus {
     public interface ILuditorDataServanda<T> {
-        Guid LegoNovissimus();
+        Task<Guid?> LegoNovissimus();
         Task<IDataServanda<T>> Arcessere(Guid guid);
-        Task<Guid> Servare(T dataDTO);
+        Task<Guid> CreareManualis(T dataDTO);
+        Task<Guid> CreareAutomatics(T dataDTO);
         Task<Guid> Servare(Guid guid, T dataDTO);
-        Task<Guid> ServareAutomaticus(T dataDTO);
         Task Deleto(Guid guid);
-        IReadOnlyList<Guid> TabulaManualis();
-        IReadOnlyList<Guid> TabulaAutomaticus();
+        Task<IReadOnlyList<Guid>> TabulaManualis();
+        Task<IReadOnlyList<Guid>> TabulaAutomaticus();
     }
 }
