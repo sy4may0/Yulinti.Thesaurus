@@ -1,0 +1,14 @@
+{
+  "name": "Yulinti.Thesaurus",
+  "rootNamespace": "Yulinti.Thesaurus",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -90,3 +90,52 @@ ILuditorDataServanda<MyDto> luditor3 = FabricaLuditorDataServanda.Creare<MyDto>(
 ```
 
 データの実体は `index.json` があるディレクトリに、GUID をファイル名とした JSON として配置されます。`dirPath` にはそのディレクトリの**絶対パス**を渡してください。
+
+---
+
+## Unity プロジェクトへの取り込み
+
+このライブラリは .NET Standard 2.1 でビルドされており、Unity 2021.2 以降で利用できます。取り込み方法は次の2通りです。
+
+### 方法1: DLL を配置する
+
+1. リポジトリで `dotnet build -c Release` を実行し、`thesaurus/bin/Release/netstandard2.1/thesaurus.dll` をビルドする。
+2. Unity プロジェクト内の `Assets/Plugins/Thesaurus` など任意のフォルダに `thesaurus.dll` を配置する。
+3. 本ライブラリは **System.Text.Json** に依存しています。Unity 2022.1 以降ではエンジンに含まれているためそのままで問題ありません。それより古い Unity の場合は、同様に .NET Standard 2.1 用の System.Text.Json の DLL を Plugins に含めるか、別途対応が必要です。
+4. プレイヤー設定で **API Compatibility Level** が .NET Standard 2.1 になっていることを確認する。
+
+手軽に試すときや、ソースを触らない運用に向いています。ライブラリを更新したときは、再度ビルドして DLL を差し替えてください。
+
+### 方法2: Package Manager で Git から取得する（推奨）
+
+Unity の Package Manager は、Git の URL を指定してパッケージを追加できます。UPM 用の `package.json` は **thesaurus フォルダ内**にあり、本体のみがパッケージとして取り込まれます（テストは含みません）。
+
+**手順**
+
+1. Unity で **Window > Package Manager** を開く。
+2. 左上の **+** から **Add package from git URL** を選ぶ。
+3. 次の URL を入力して **Add** する（`?path=/thesaurus` で本体フォルダのみを指定）。
+   - 最新を取得する場合:  
+     `https://github.com/sy4may0/thesaurus.git?path=/thesaurus`
+   - タグでバージョンを固定する場合:  
+     `https://github.com/sy4may0/thesaurus.git?path=/thesaurus#v0.0.1`
+
+**manifest.json で直接指定する場合**
+
+プロジェクトの `Packages/manifest.json` の `dependencies` に追加します。
+
+```json
+{
+  "dependencies": {
+    "com.yulinti.thesaurus": "https://github.com/sy4may0/thesaurus.git?path=/thesaurus"
+  }
+}
+```
+
+バージョン固定する場合は URL の末尾に `#v1.0.0` や `#main` を付けます（`?path=/thesaurus` のうしろに `#リビジョン`）。  
+プライベートリポジトリの場合は、HTTPS の認証設定か SSH の URL（例: `git@github.com:user/thesaurus.git`）が必要です。
+
+**補足**
+
+- この方法では **本体のソース（.cs）だけが Unity に取り込まれ**、テスト用フォルダは含まれません。
+- Git クライアント（2.14 以上）がインストールされ、PATH が通っている必要があります。
