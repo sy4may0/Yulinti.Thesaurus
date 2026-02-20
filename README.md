@@ -132,8 +132,7 @@ Unity の Package Manager は、Git の URL を指定してパッケージを追
 }
 ```
 
-バージョン固定する場合は URL の末尾に `#v1.0.0` や `#main` を付けます（`?path=/thesaurus` のうしろに `#リビジョン`）。  
-プライベートリポジトリの場合は、HTTPS の認証設定か SSH の URL（例: `git@github.com:user/thesaurus.git`）が必要です。
+バージョン固定する場合は URL の末尾に `#v0.0.1` や `#main` を付けます（`?path=/thesaurus` のうしろに `#リビジョン`）。  
 
 **補足**
 
