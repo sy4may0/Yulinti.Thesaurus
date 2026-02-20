@@ -1,8 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Xunit;
 using Yulinti.Thesaurus;
@@ -85,7 +87,73 @@ public class LuditorDataServandaTests
         public int Value { get; set; }
     }
 
+    private sealed class IndexServandaDtoLike
+    {
+        [JsonPropertyName("revisio_proximus")]
+        public long RevisioProximus { get; set; }
+
+        [JsonPropertyName("versio")]
+        public int Versio { get; set; }
+
+        [JsonPropertyName("manualis")]
+        public Dictionary<Guid, DataServandaDtoLike> Manualis { get; set; } = new Dictionary<Guid, DataServandaDtoLike>();
+
+        [JsonPropertyName("ordo_manualis")]
+        public List<Guid> OrdoManualis { get; set; } = new List<Guid>();
+
+        [JsonPropertyName("automaticus")]
+        public Dictionary<Guid, DataServandaDtoLike> Automaticus { get; set; } = new Dictionary<Guid, DataServandaDtoLike>();
+
+        [JsonPropertyName("ordo_automaticus")]
+        public List<Guid> OrdoAutomaticus { get; set; } = new List<Guid>();
+
+        [JsonPropertyName("novissimus")]
+        public NovissimusServandaDtoLike? Novissimus { get; set; }
+    }
+
+    private sealed class DataServandaDtoLike
+    {
+        [JsonPropertyName("revisio")]
+        public long Revisio { get; set; }
+
+        [JsonPropertyName("timestamp")]
+        public DateTime Timestamp { get; set; }
+
+        [JsonPropertyName("path")]
+        public string Path { get; set; } = string.Empty;
+    }
+
+    private sealed class NovissimusServandaDtoLike
+    {
+        [JsonPropertyName("methodus")]
+        public string Methodus { get; set; } = string.Empty;
+
+        [JsonPropertyName("guid")]
+        public Guid Guid { get; set; }
+
+        [JsonPropertyName("revisio")]
+        public long Revisio { get; set; }
+
+        [JsonPropertyName("timestamp")]
+        public DateTime Timestamp { get; set; }
+    }
+
     private static TestDto MakeDto(int i) => new TestDto { Name = $"name-{i}", Value = i };
+
+    private static void WriteIndex(string dirPath, IndexServandaDtoLike dto)
+    {
+        string indexPath = System.IO.Path.Combine(dirPath, "index.json");
+        string json = JsonSerializer.Serialize(dto);
+        File.WriteAllText(indexPath, json, Encoding.UTF8);
+    }
+
+    private static void WriteDataFile(string dirPath, string relativePath, TestDto dto)
+    {
+        string fullPath = System.IO.Path.Combine(dirPath, relativePath);
+        string? dir = System.IO.Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        File.WriteAllText(fullPath, JsonSerializer.Serialize(dto), Encoding.UTF8);
+    }
 
     [Fact]
     public void Fabrica_Creare_CreatesIndexAndReturnsInstance()
@@ -119,6 +187,119 @@ public class LuditorDataServandaTests
         Assert.NotNull(sut);
         Assert.True(tracking.ScribereSyncCount > 0);
         Assert.True(File.Exists(System.IO.Path.Combine(temp.Path, "index.json")));
+    }
+
+    [Fact]
+    public void Constructor_InitareServandaDto_InvalidJson_Throws()
+    {
+        using var temp = new TempDir();
+        string indexPath = System.IO.Path.Combine(temp.Path, "index.json");
+        File.WriteAllText(indexPath, "{ not json", Encoding.UTF8);
+
+        Assert.Throws<JsonException>(() => FabricaLuditorDataServanda.Creare<TestDto>(temp.Path));
+    }
+
+    [Fact]
+    public async Task Normare_RemovesEntriesWithMissingFiles()
+    {
+        using var temp = new TempDir();
+        var sut = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+
+        Guid guidManual = await sut.CreareManualis(MakeDto(1));
+        Guid guidAuto = await sut.CreareAutomatics(MakeDto(2));
+
+        string manualPath = System.IO.Path.Combine(temp.Path, guidManual.ToString() + ".json");
+        if (File.Exists(manualPath)) File.Delete(manualPath);
+
+        var sutReloaded = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+
+        var manualis = await sutReloaded.TabulaManualis();
+        var automaticus = await sutReloaded.TabulaAutomaticus();
+
+        Assert.Empty(manualis);
+        Assert.Single(automaticus);
+        Assert.Equal(guidAuto, automaticus[0]);
+    }
+
+    [Fact]
+    public async Task Normare_RemovesDuplicateGuid_KeepingNewestTimestamp()
+    {
+        using var temp = new TempDir();
+        Guid guid = Guid.NewGuid();
+        DateTime older = DateTime.UtcNow.AddMinutes(-10);
+        DateTime newer = DateTime.UtcNow.AddMinutes(-5);
+
+        var index = new IndexServandaDtoLike
+        {
+            RevisioProximus = 3,
+            Versio = 0,
+            Manualis = new Dictionary<Guid, DataServandaDtoLike>
+            {
+                [guid] = new DataServandaDtoLike { Revisio = 1, Timestamp = older, Path = "m.json" }
+            },
+            OrdoManualis = new List<Guid> { guid },
+            Automaticus = new Dictionary<Guid, DataServandaDtoLike>
+            {
+                [guid] = new DataServandaDtoLike { Revisio = 2, Timestamp = newer, Path = "a.json" }
+            },
+            OrdoAutomaticus = new List<Guid> { guid },
+            Novissimus = null
+        };
+
+        WriteIndex(temp.Path, index);
+        WriteDataFile(temp.Path, "m.json", MakeDto(1));
+        WriteDataFile(temp.Path, "a.json", MakeDto(2));
+
+        var sutReloaded = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+        var manualis = await sutReloaded.TabulaManualis();
+        var automaticus = await sutReloaded.TabulaAutomaticus();
+
+        Assert.Empty(manualis);
+        Assert.Single(automaticus);
+        Assert.Equal(guid, automaticus[0]);
+        Assert.False(File.Exists(System.IO.Path.Combine(temp.Path, "m.json")));
+        Assert.True(File.Exists(System.IO.Path.Combine(temp.Path, "a.json")));
+    }
+
+    [Fact]
+    public async Task Normare_RemovesDuplicateRevisio_KeepingNewestTimestamp()
+    {
+        using var temp = new TempDir();
+        Guid guidManual = Guid.NewGuid();
+        Guid guidAuto = Guid.NewGuid();
+        DateTime older = DateTime.UtcNow.AddMinutes(-10);
+        DateTime newer = DateTime.UtcNow.AddMinutes(-5);
+
+        var index = new IndexServandaDtoLike
+        {
+            RevisioProximus = 3,
+            Versio = 0,
+            Manualis = new Dictionary<Guid, DataServandaDtoLike>
+            {
+                [guidManual] = new DataServandaDtoLike { Revisio = 1, Timestamp = older, Path = "manual.json" }
+            },
+            OrdoManualis = new List<Guid> { guidManual },
+            Automaticus = new Dictionary<Guid, DataServandaDtoLike>
+            {
+                [guidAuto] = new DataServandaDtoLike { Revisio = 1, Timestamp = newer, Path = "auto.json" }
+            },
+            OrdoAutomaticus = new List<Guid> { guidAuto },
+            Novissimus = null
+        };
+
+        WriteIndex(temp.Path, index);
+        WriteDataFile(temp.Path, "manual.json", MakeDto(1));
+        WriteDataFile(temp.Path, "auto.json", MakeDto(2));
+
+        var sutReloaded = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+        var manualis = await sutReloaded.TabulaManualis();
+        var automaticus = await sutReloaded.TabulaAutomaticus();
+
+        Assert.Empty(manualis);
+        Assert.Single(automaticus);
+        Assert.Equal(guidAuto, automaticus[0]);
+        Assert.False(File.Exists(System.IO.Path.Combine(temp.Path, "manual.json")));
+        Assert.True(File.Exists(System.IO.Path.Combine(temp.Path, "auto.json")));
     }
 
     [Fact]
