@@ -1,0 +1,92 @@
+# Thesaurus
+
+シリアライズ可能なクラスを JSON ファイルに書き出し・読み込みするためのライブラリです。  
+`index.json` で目次を管理し、各データは GUID をファイル名とした JSON として保存されます。
+
+---
+
+## インターフェース
+
+### IDataServanda&lt;T&gt;
+
+保存済みの「1件分のデータ」を表す読み取り専用のインターフェースです。  
+`Arcessere` などで取得した結果として返され、メタデータ（GUID・リビジョン・タイムスタンプ）と本体データ `Data` にアクセスできます。
+
+| メンバー | 型 | 説明 |
+|----------|-----|------|
+| `Guid` | `Guid` | このデータの一意識別子。RFC 4122 の canonical 形式。 |
+| `Revisio` | `long` | このデータのリビジョン番号。全体で単一カウンタ。 |
+| `Timestamp` | `DateTime` | このデータの更新日時（`updated_at`）。 |
+| `Data` | `T` | 保存時に渡した DTO のデシリアライズ結果。 |
+
+**注意:** `IDataServanda<T>` は不変のスナップショットとして扱い、返された `Data` を呼び出し元で変更しても永続化されません。上書きする場合は `Servare(guid, dataDTO)` を使用してください。
+
+---
+
+### ILuditorDataServanda&lt;T&gt;
+
+データの作成・読み取り・更新・削除および一覧取得を行うメインのインターフェースです。  
+内部で `index.json` と各データ JSON を管理し、**Semaphore により 1 インスタンスあたり同時に 1 メソッドのみが実行**されます。  
+取得は `FabricaLuditorDataServanda.Creare<T>(dirPath)` で行います。
+
+#### メソッド一覧
+
+| メソッド | 戻り値 | 説明 |
+|----------|--------|------|
+| `LegoNovissimus()` | `Task<Guid?>` | 最後に保存されたデータの GUID を取得する。1件も無い場合は `null`。 |
+| `Arcessere(guid)` | `Task<IDataServanda<T>>` | 指定した GUID のデータを読み込んで返す。存在しない GUID の場合は例外。 |
+| `CreareManualis(dataDTO)` | `Task<Guid>` | 新規に手動保存用エントリを作成し、データを保存する。採番された GUID を返す。 |
+| `CreareAutomatics(dataDTO)` | `Task<Guid>` | 新規に自動保存用エントリを作成し、データを保存する。採番された GUID を返す。自動保存は履歴数に上限あり。 |
+| `Servare(guid, dataDTO)` | `Task<Guid>` | 既存の GUID に対応するファイルを、渡した DTO で上書き保存する。同じ GUID を返す。 |
+| `Deleto(guid)` | `Task` | 指定した GUID のデータ（index 上のエントリとデータ JSON）を削除する。 |
+| `TabulaManualis()` | `Task<IReadOnlyList<Guid>>` | 手動保存されたデータの GUID 一覧を取得する。 |
+| `TabulaAutomaticus()` | `Task<IReadOnlyList<Guid>>` | 自動保存されたデータの GUID 一覧を取得する。 |
+
+すべて非同期メソッドのため、呼び出し時は `await` を使用してください。
+
+#### Manualis（手動保存）と Automaticus（自動保存）
+
+データの保存先は **Manualis** と **Automaticus** の2種類があります。用途に応じて使い分けてください。
+
+**Manualis（手動保存）**  
+GUID を指定した追加・更新・削除を想定したストアです。エントリの作成は `CreareManualis`、既存の更新は `Servare(guid, dataDTO)`、削除は `Deleto(guid)` で行います。一般的な CRUD（作成・読み取り・更新・削除）を行うユースケースでは、こちらを使います。手動で管理するエントリ数に制限はありません。
+
+**Automaticus（自動保存）**  
+世代管理されるデータを想定したストアです。`longitudoAutomaticus`（ファクトリで指定、デフォルト 5）で保持する件数が決まり、**新しいデータを追加すると古いものから順に削除**されます。GUID を指定して `Servare` で更新することは可能ですが、運用としては「常に `CreareAutomatics` で新データを追加し、古い世代は自動で消えていく」形にすることを推奨します。自動保存・履歴・スナップショットのような用途に向いています。
+
+---
+
+## 利用時の留意点
+
+- **型パラメータ `T` は JSON シリアライズ可能である必要があります**  
+  - 使用しているシリアライザ（例: `System.Text.Json` や Newtonsoft.Json）が扱える型にしてください。必要に応じて `[Serializable]` や属性・パブリックプロパティなどの要件を満たしてください。
+
+- **引数で渡す DTO はスナップショット化しなくてよい**  
+  - メソッド呼び出し時にその場でシリアライズされるため、呼び出し後に呼び出し元が同じオブジェクトを変更しても、既に保存された内容には影響しません。参照をそのまま渡して問題ありません。
+
+- **コンストラクタ（Luditor の生成）にはオーバーヘッドがある**  
+  - `FabricaLuditorDataServanda.Creare<T>(dirPath)` 実行時に、`index.json` の読み込みとノーマライズ（不整合データの除去、`revisio_proximus` や `ordo` の確定など）が走ります。頻繁にインスタンスを生成・破棄するのではなく、**1 ディレクトリにつき 1 つの `ILuditorDataServanda<T>` を保持して再利用**する運用を推奨します。
+
+- **1 Luditor で 1 メソッドだけが排他で動く**  
+  - 1 つの `ILuditorDataServanda<T>` インスタンスでは、Semaphore により同時に実行されるメソッドは常に 1 つです。複数メソッドを並列に呼んでも、内部では順次実行されます。大量の並列呼び出しを行う場合は、キューイングやスロットリングを検討してください。
+
+---
+
+## ファクトリ
+
+```csharp
+// データディレクトリの絶対パスを指定して Luditor を取得
+ILuditorDataServanda<MyDto> luditor = FabricaLuditorDataServanda.Creare<MyDto>(dirPath);
+
+// 自動保存の履歴数・経過秒数を指定する場合（デフォルト: 5 件, 30 秒）
+ILuditorDataServanda<MyDto> luditor2 = FabricaLuditorDataServanda.Creare<MyDto>(
+    dirPath,
+    longitudoAutomaticus: 10,
+    tempusPraeteriitSec: 60
+);
+
+// ファイル I/O を差し替える場合（IScriba を渡すオーバーロード）
+ILuditorDataServanda<MyDto> luditor3 = FabricaLuditorDataServanda.Creare<MyDto>(dirPath, myScriba);
+```
+
+データの実体は `index.json` があるディレクトリに、GUID をファイル名とした JSON として配置されます。`dirPath` にはそのディレクトリの**絶対パス**を渡してください。
