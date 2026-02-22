@@ -1,6 +1,6 @@
 {
   "name": "com.yulinti.thesaurus",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "displayName": "Thesaurus",
   "description": "シリアライズ可能なクラスを JSON で書き出し・読み込みするライブラリ。index.json で目次を管理し、GUID をファイル名とした JSON として保存します。",
   "unity": "2021.2"

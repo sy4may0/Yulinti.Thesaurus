@@ -150,9 +150,9 @@ Unity の Package Manager は、Git の URL を指定してパッケージを追
 2. 左上の **+** から **Add package from git URL** を選ぶ。
 3. 次の URL を入力して **Add** する（`?path=/thesaurus` で本体フォルダのみを指定）。
    - 最新を取得する場合:  
-     `https://github.com/sy4may0/thesaurus.git?path=/thesaurus`
+     `https://github.com/sy4may0/Yulinti.Thesaurus.git?path=/thesaurus`
    - タグでバージョンを固定する場合:  
-     `https://github.com/sy4may0/thesaurus.git?path=/thesaurus#v0.0.1`
+     `https://github.com/sy4may0/Yulinti.Thesaurus.git?path=/thesaurus#v0.0.3`
 
 **manifest.json で直接指定する場合**
 
