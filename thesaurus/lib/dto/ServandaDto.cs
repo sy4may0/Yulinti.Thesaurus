@@ -46,6 +46,9 @@ namespace Yulinti.Thesaurus {
         
         [JsonPropertyName("path")]
         public string Path { get; set; } = null!;
+
+        [JsonPropertyName("path_notitia")]
+        public string PathNotitia { get; set; } = null!;
     }
 
     internal class NovissimusServandaDto {

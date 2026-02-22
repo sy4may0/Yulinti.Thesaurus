@@ -1,10 +1,10 @@
 using System;
 
 namespace Yulinti.Thesaurus {
-    public interface IDataServanda<TData> {
+    public interface IDataNotitia<TNotitia> {
         Guid Guid { get; }
         long Revisio { get; }
         DateTime Timestamp { get; }
-        TData Data { get; }
+        TNotitia Notitia { get; }
     }
 }

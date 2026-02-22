@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "icwoZ6qRTTw=",
+  "dgSpecHash": "kygghhSm//Q=",
   "success": true,
-  "projectFilePath": "/work/thesaurus/thesaurus.csproj",
+  "projectFilePath": "/thesaurus/thesaurus.csproj",
   "expectedPackageFiles": [
     "/root/.nuget/packages/microsoft.bcl.asyncinterfaces/8.0.0/microsoft.bcl.asyncinterfaces.8.0.0.nupkg.sha512",
     "/root/.nuget/packages/system.buffers/4.5.1/system.buffers.4.5.1.nupkg.sha512",

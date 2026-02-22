@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Xunit;
 using Yulinti.Thesaurus;
+using System.Threading;
 
 public class LuditorDataServandaTests
 {
@@ -43,8 +44,12 @@ public class LuditorDataServandaTests
         public int LegereCount { get; private set; }
         public int ScribereSyncCount { get; private set; }
         public int LegereSyncCount { get; private set; }
+        public int ScribereCountMul { get; private set; }
+        public int LegereCountMul { get; private set; } 
+        public int ScribereSyncCountMul { get; private set; }
+        public int LegereSyncCountMul { get; private set; }
 
-        public async Task Scribere(string path, string content, int tempusPraeteriit = -1)
+        public async Task Scribere(string path, string content, CancellationToken ct = default)
         {
             ScribereCount++;
             string? dir = System.IO.Path.GetDirectoryName(path);
@@ -52,7 +57,7 @@ public class LuditorDataServandaTests
             await File.WriteAllTextAsync(path, content, Encoding.UTF8);
         }
 
-        public async Task<string> Legere(string path, int tempusPraeteriit = -1)
+        public async Task<string> Legere(string path, CancellationToken ct = default)
         {
             LegereCount++;
             if (!File.Exists(path))
@@ -62,7 +67,7 @@ public class LuditorDataServandaTests
             return await File.ReadAllTextAsync(path, Encoding.UTF8);
         }
 
-        public void ScribereSync(string path, string content, int tempusPraeteriit = -1)
+        public void ScribereSync(string path, string content, CancellationToken ct = default)
         {
             ScribereSyncCount++;
             string? dir = System.IO.Path.GetDirectoryName(path);
@@ -70,7 +75,7 @@ public class LuditorDataServandaTests
             File.WriteAllText(path, content, Encoding.UTF8);
         }
 
-        public string LegereSync(string path, int tempusPraeteriit = -1)
+        public string LegereSync(string path, CancellationToken ct = default)
         {
             LegereSyncCount++;
             if (!File.Exists(path))
@@ -79,9 +84,45 @@ public class LuditorDataServandaTests
             }
             return File.ReadAllText(path, Encoding.UTF8);
         }
+
+        public async Task Scribere(string[] paths, string[] contents, CancellationToken ct = default)
+        {
+            ScribereCountMul++;
+            for (int i = 0; i < paths.Length; i++)
+            {
+                await Scribere(paths[i], contents[i], ct);
+            }
+        }
+
+        public async Task<string[]> Legere(string[] paths, CancellationToken ct = default)
+        {
+            LegereCountMul++;
+            return await Task.WhenAll(paths.Select(p => Legere(p, ct))).ConfigureAwait(false);
+        }
+
+        public void ScribereSync(string[] paths, string[] contents, CancellationToken ct = default)
+        {
+            ScribereSyncCountMul++;
+            for (int i = 0; i < paths.Length; i++)
+            {
+                ScribereSync(paths[i], contents[i], ct);
+            }
+        }
+
+        public string[] LegereSync(string[] paths, CancellationToken ct = default)
+        {
+            LegereSyncCountMul++;
+            return paths.Select(p => LegereSync(p, ct)).ToArray();
+        }
     }
 
-    private sealed class TestDto
+    private sealed class TestNotitiaDto
+    {
+        public string Title { get; set; } = string.Empty;
+        public int Rank { get; set; }
+    }
+
+    private sealed class TestDataDto
     {
         public string Name { get; set; } = string.Empty;
         public int Value { get; set; }
@@ -121,6 +162,9 @@ public class LuditorDataServandaTests
 
         [JsonPropertyName("path")]
         public string Path { get; set; } = string.Empty;
+
+        [JsonPropertyName("path_notitia")]
+        public string PathNotitia { get; set; } = string.Empty;
     }
 
     private sealed class NovissimusServandaDtoLike
@@ -138,7 +182,8 @@ public class LuditorDataServandaTests
         public DateTime Timestamp { get; set; }
     }
 
-    private static TestDto MakeDto(int i) => new TestDto { Name = $"name-{i}", Value = i };
+    private static TestNotitiaDto MakeNotitia(int i) => new TestNotitiaDto { Title = $"title-{i}", Rank = i };
+    private static TestDataDto MakeData(int i) => new TestDataDto { Name = $"name-{i}", Value = i };
 
     private static void WriteIndex(string dirPath, IndexServandaDtoLike dto)
     {
@@ -147,7 +192,7 @@ public class LuditorDataServandaTests
         File.WriteAllText(indexPath, json, Encoding.UTF8);
     }
 
-    private static void WriteDataFile(string dirPath, string relativePath, TestDto dto)
+    private static void WriteDataFile(string dirPath, string relativePath, object dto)
     {
         string fullPath = System.IO.Path.Combine(dirPath, relativePath);
         string? dir = System.IO.Path.GetDirectoryName(fullPath);
@@ -159,7 +204,7 @@ public class LuditorDataServandaTests
     public void Fabrica_Creare_CreatesIndexAndReturnsInstance()
     {
         using var temp = new TempDir();
-        var sut = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
 
         Assert.NotNull(sut);
         string indexPath = System.IO.Path.Combine(temp.Path, "index.json");
@@ -182,7 +227,7 @@ public class LuditorDataServandaTests
         using var temp = new TempDir();
         var tracking = new TrackingScriba();
 
-        var sut = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path, tracking);
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path, tracking);
 
         Assert.NotNull(sut);
         Assert.True(tracking.ScribereSyncCount > 0);
@@ -196,22 +241,44 @@ public class LuditorDataServandaTests
         string indexPath = System.IO.Path.Combine(temp.Path, "index.json");
         File.WriteAllText(indexPath, "{ not json", Encoding.UTF8);
 
-        Assert.Throws<JsonException>(() => FabricaLuditorDataServanda.Creare<TestDto>(temp.Path));
+        Assert.Throws<JsonException>(() => FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path));
     }
 
     [Fact]
     public async Task Normare_RemovesEntriesWithMissingFiles()
     {
         using var temp = new TempDir();
-        var sut = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
 
-        Guid guidManual = await sut.CreareManualis(MakeDto(1));
-        Guid guidAuto = await sut.CreareAutomatics(MakeDto(2));
+        Guid guidManual = await sut.CreareManualis(MakeNotitia(1), MakeData(1));
+        Guid guidAuto = await sut.CreareAutomaticus(MakeNotitia(2), MakeData(2));
 
         string manualPath = System.IO.Path.Combine(temp.Path, guidManual.ToString() + ".json");
         if (File.Exists(manualPath)) File.Delete(manualPath);
 
-        var sutReloaded = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+        var sutReloaded = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
+
+        var manualis = await sutReloaded.TabulaManualis();
+        var automaticus = await sutReloaded.TabulaAutomaticus();
+
+        Assert.Empty(manualis);
+        Assert.Single(automaticus);
+        Assert.Equal(guidAuto, automaticus[0]);
+    }
+
+    [Fact]
+    public async Task Normare_RemovesEntriesWithMissingNotitia()
+    {
+        using var temp = new TempDir();
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
+
+        Guid guidManual = await sut.CreareManualis(MakeNotitia(1), MakeData(1));
+        Guid guidAuto = await sut.CreareAutomaticus(MakeNotitia(2), MakeData(2));
+
+        string manualNotitiaPath = System.IO.Path.Combine(temp.Path, guidManual.ToString() + "_n.json");
+        if (File.Exists(manualNotitiaPath)) File.Delete(manualNotitiaPath);
+
+        var sutReloaded = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
 
         var manualis = await sutReloaded.TabulaManualis();
         var automaticus = await sutReloaded.TabulaAutomaticus();
@@ -235,22 +302,24 @@ public class LuditorDataServandaTests
             Versio = 0,
             Manualis = new Dictionary<Guid, DataServandaDtoLike>
             {
-                [guid] = new DataServandaDtoLike { Revisio = 1, Timestamp = older, Path = "m.json" }
+                [guid] = new DataServandaDtoLike { Revisio = 1, Timestamp = older, Path = "m.json", PathNotitia = "m_n.json" }
             },
             OrdoManualis = new List<Guid> { guid },
             Automaticus = new Dictionary<Guid, DataServandaDtoLike>
             {
-                [guid] = new DataServandaDtoLike { Revisio = 2, Timestamp = newer, Path = "a.json" }
+                [guid] = new DataServandaDtoLike { Revisio = 2, Timestamp = newer, Path = "a.json", PathNotitia = "a_n.json" }
             },
             OrdoAutomaticus = new List<Guid> { guid },
             Novissimus = null
         };
 
         WriteIndex(temp.Path, index);
-        WriteDataFile(temp.Path, "m.json", MakeDto(1));
-        WriteDataFile(temp.Path, "a.json", MakeDto(2));
+        WriteDataFile(temp.Path, "m.json", MakeData(1));
+        WriteDataFile(temp.Path, "m_n.json", MakeNotitia(1));
+        WriteDataFile(temp.Path, "a.json", MakeData(2));
+        WriteDataFile(temp.Path, "a_n.json", MakeNotitia(2));
 
-        var sutReloaded = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+        var sutReloaded = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
         var manualis = await sutReloaded.TabulaManualis();
         var automaticus = await sutReloaded.TabulaAutomaticus();
 
@@ -258,7 +327,9 @@ public class LuditorDataServandaTests
         Assert.Single(automaticus);
         Assert.Equal(guid, automaticus[0]);
         Assert.False(File.Exists(System.IO.Path.Combine(temp.Path, "m.json")));
+        Assert.False(File.Exists(System.IO.Path.Combine(temp.Path, "m_n.json")));
         Assert.True(File.Exists(System.IO.Path.Combine(temp.Path, "a.json")));
+        Assert.True(File.Exists(System.IO.Path.Combine(temp.Path, "a_n.json")));
     }
 
     [Fact]
@@ -276,22 +347,24 @@ public class LuditorDataServandaTests
             Versio = 0,
             Manualis = new Dictionary<Guid, DataServandaDtoLike>
             {
-                [guidManual] = new DataServandaDtoLike { Revisio = 1, Timestamp = older, Path = "manual.json" }
+                [guidManual] = new DataServandaDtoLike { Revisio = 1, Timestamp = older, Path = "manual.json", PathNotitia = "manual_n.json" }
             },
             OrdoManualis = new List<Guid> { guidManual },
             Automaticus = new Dictionary<Guid, DataServandaDtoLike>
             {
-                [guidAuto] = new DataServandaDtoLike { Revisio = 1, Timestamp = newer, Path = "auto.json" }
+                [guidAuto] = new DataServandaDtoLike { Revisio = 1, Timestamp = newer, Path = "auto.json", PathNotitia = "auto_n.json" }
             },
             OrdoAutomaticus = new List<Guid> { guidAuto },
             Novissimus = null
         };
 
         WriteIndex(temp.Path, index);
-        WriteDataFile(temp.Path, "manual.json", MakeDto(1));
-        WriteDataFile(temp.Path, "auto.json", MakeDto(2));
+        WriteDataFile(temp.Path, "manual.json", MakeData(1));
+        WriteDataFile(temp.Path, "manual_n.json", MakeNotitia(1));
+        WriteDataFile(temp.Path, "auto.json", MakeData(2));
+        WriteDataFile(temp.Path, "auto_n.json", MakeNotitia(2));
 
-        var sutReloaded = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+        var sutReloaded = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
         var manualis = await sutReloaded.TabulaManualis();
         var automaticus = await sutReloaded.TabulaAutomaticus();
 
@@ -299,23 +372,26 @@ public class LuditorDataServandaTests
         Assert.Single(automaticus);
         Assert.Equal(guidAuto, automaticus[0]);
         Assert.False(File.Exists(System.IO.Path.Combine(temp.Path, "manual.json")));
+        Assert.False(File.Exists(System.IO.Path.Combine(temp.Path, "manual_n.json")));
         Assert.True(File.Exists(System.IO.Path.Combine(temp.Path, "auto.json")));
+        Assert.True(File.Exists(System.IO.Path.Combine(temp.Path, "auto_n.json")));
     }
 
     [Fact]
     public async Task CreareManualis_UpdatesIndexAndLists()
     {
         using var temp = new TempDir();
-        var sut = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
 
         DateTime start = DateTime.UtcNow;
-        Guid guid = await sut.CreareManualis(MakeDto(1));
+        Guid guid = await sut.CreareManualis(MakeNotitia(1), MakeData(1));
         DateTime end = DateTime.UtcNow;
 
         var manualis = await sut.TabulaManualis();
         var automaticus = await sut.TabulaAutomaticus();
         Guid? novissimus = await sut.LegoNovissimus();
         var data = await sut.Arcessere(guid);
+        var notitia = await sut.ArcessereNotitiam(guid);
 
         Assert.Single(manualis);
         Assert.Equal(guid, manualis[0]);
@@ -326,17 +402,19 @@ public class LuditorDataServandaTests
         Assert.InRange(data.Timestamp, start.AddSeconds(-1), end.AddSeconds(1));
         Assert.Equal(1, data.Data.Value);
         Assert.Equal("name-1", data.Data.Name);
+        Assert.Equal(1, notitia.Notitia.Rank);
+        Assert.Equal("title-1", notitia.Notitia.Title);
     }
 
     [Fact]
-    public async Task CreareAutomatics_RotatesAndKeepsLatest()
+    public async Task CreareAutomaticus_RotatesAndKeepsLatest()
     {
         using var temp = new TempDir();
-        var sut = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path, longitudoAutomaticus: 2, tempusPraeteriitSec: 30);
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path, longitudoAutomaticus: 2, tempusPraeteriitSec: 30);
 
-        Guid guid1 = await sut.CreareAutomatics(MakeDto(1));
-        Guid guid2 = await sut.CreareAutomatics(MakeDto(2));
-        Guid guid3 = await sut.CreareAutomatics(MakeDto(3));
+        Guid guid1 = await sut.CreareAutomaticus(MakeNotitia(1), MakeData(1));
+        Guid guid2 = await sut.CreareAutomaticus(MakeNotitia(2), MakeData(2));
+        Guid guid3 = await sut.CreareAutomaticus(MakeNotitia(3), MakeData(3));
 
         var automaticus = await sut.TabulaAutomaticus();
         Assert.Equal(2, automaticus.Count);
@@ -348,23 +426,26 @@ public class LuditorDataServandaTests
 
         Assert.DoesNotContain(guid1, automaticus);
         string removedPath = System.IO.Path.Combine(temp.Path, guid1.ToString() + ".json");
+        string removedNotitiaPath = System.IO.Path.Combine(temp.Path, guid1.ToString() + "_n.json");
         Assert.False(File.Exists(removedPath));
+        Assert.False(File.Exists(removedNotitiaPath));
     }
 
     [Fact]
     public async Task Servare_UpdatesRevisionTimestampAndOrder()
     {
         using var temp = new TempDir();
-        var sut = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
 
-        Guid guidA = await sut.CreareManualis(MakeDto(1));
-        Guid guidB = await sut.CreareManualis(MakeDto(2));
+        Guid guidA = await sut.CreareManualis(MakeNotitia(1), MakeData(1));
+        Guid guidB = await sut.CreareManualis(MakeNotitia(2), MakeData(2));
 
         var before = await sut.Arcessere(guidA);
         await Task.Delay(10);
 
-        await sut.Servare(guidA, MakeDto(99));
+        await sut.Servare(guidA, MakeNotitia(99), MakeData(99));
         var after = await sut.Arcessere(guidA);
+        var afterNotitia = await sut.ArcessereNotitiam(guidA);
 
         var manualis = await sut.TabulaManualis();
 
@@ -373,6 +454,8 @@ public class LuditorDataServandaTests
         Assert.True(after.Timestamp >= before.Timestamp);
         Assert.Equal(99, after.Data.Value);
         Assert.Equal("name-99", after.Data.Name);
+        Assert.Equal(99, afterNotitia.Notitia.Rank);
+        Assert.Equal("title-99", afterNotitia.Notitia.Title);
         Assert.Contains(guidB, manualis);
     }
 
@@ -380,10 +463,10 @@ public class LuditorDataServandaTests
     public async Task Deleto_RemovesEntryAndUpdatesNovissimus()
     {
         using var temp = new TempDir();
-        var sut = FabricaLuditorDataServanda.Creare<TestDto>(temp.Path);
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
 
-        Guid guidManual = await sut.CreareManualis(MakeDto(1));
-        Guid guidAuto = await sut.CreareAutomatics(MakeDto(2));
+        Guid guidManual = await sut.CreareManualis(MakeNotitia(1), MakeData(1));
+        Guid guidAuto = await sut.CreareAutomaticus(MakeNotitia(2), MakeData(2));
 
         Guid? latest = await sut.LegoNovissimus();
         Assert.Equal(guidAuto, latest);
@@ -397,5 +480,21 @@ public class LuditorDataServandaTests
         Assert.Empty(automaticus);
 
         await Assert.ThrowsAsync<FileNotFoundException>(() => sut.Arcessere(guidAuto));
+        await Assert.ThrowsAsync<FileNotFoundException>(() => sut.ArcessereNotitiam(guidAuto));
+    }
+
+    [Fact]
+    public async Task ArcessereNotitiam_ReturnsNotitiaData()
+    {
+        using var temp = new TempDir();
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
+
+        Guid guid = await sut.CreareManualis(MakeNotitia(7), MakeData(7));
+        var notitia = await sut.ArcessereNotitiam(guid);
+
+        Assert.Equal(guid, notitia.Guid);
+        Assert.Equal(0, notitia.Revisio);
+        Assert.Equal(7, notitia.Notitia.Rank);
+        Assert.Equal("title-7", notitia.Notitia.Title);
     }
 }

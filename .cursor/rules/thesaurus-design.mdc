@@ -2,6 +2,18 @@
 description: Thesaurus JSON シリアライゼーションシステムの設計仕様
 alwaysApply: true
 ---
+# Cursorへの通達。
+ビルド環境はdockerで実行します。以下のコマンドを使用してください（-itフラグなし）。
+
+```bash
+# ビルド実行
+docker run --rm -v "$(pwd)/thesaurus":/work -w /work mcr.microsoft.com/dotnet/sdk:8.0 dotnet build
+
+# テスト実行
+docker run --rm -v "$(pwd)/thesaurus.tests":/work -v "$(pwd)/thesaurus":/thesaurus -w /work mcr.microsoft.com/dotnet/sdk:8.0 dotnet test
+```
+
+注: 手動実行用のスクリプト（./d_build.sh, ./d_test.sh）も利用可能ですが、-itフラグがあるため自動化環境では使用できません。
 
 # Thesaurus 設計仕様
 
@@ -15,6 +27,11 @@ alwaysApply: true
 - 各種ファイルパスはindex.jsonがあるディレクトリ相対パスで扱う。
 - index.jsonのパスのみ絶対パスで、引数で受け取る。
 - unixtimeは秒までを取り扱う。ミリ秒は含めない。
+
+## データ設計
+2つのジェネリックを外から受け取る。
+- TNotitia: メタデータ。表示情報など、軽量のデータ。
+- TData: 本データ。全データを含む。
 
 ## JSON設計
 
@@ -30,7 +47,8 @@ JSONファイルの目次を管理する。
         <string/guid>: {
             "revisio": <long>,
             "timestamp": <string/datetime>,
-            "path": <string>
+            "path": <string>,
+            "path_notitia" <string>
         }
     },
     "ordo_manualis": [<string/guid>, ...],
@@ -38,7 +56,8 @@ JSONファイルの目次を管理する。
         <string/guid>: {
             "revisio": <long>,
             "timestamp": <string/datetime>,
-            "path": <string>
+            "path": <string>,
+            "path_notitia", <string>
         }
     },
     "ordo_automaticus": [<string/guid>, ...],
@@ -66,28 +85,35 @@ JSONファイルの目次を管理する。
 | revisio | データのリビジョン/全体で1つのカウンタを使う |
 | timestamp | stringでタイムスタンプを保持（updated_at） |
 | path | データのJSONファイルパス |
+| path_notitia | メタデータのJSONファイルパス |
 
 ### データJSON
 
-- ファイル名はguidとする
+- ファイル名は<guid>.jsonとする
+- メタデータファイル名は<guid>_n.jsonとする。
 - 内容は投入するDTOクラスに依存する
 
 ## Interface設計
 
-### public Yulinti.Thesaurus.IDataServanda<T>
+### public Yulinti.Thesaurus.IDataServanda<TData>
 
 - DataServandaの公開IF
 - 必要な値だけアクセス可能: `Guid`, `Revisio`, `Timestamp`, `Data`
 
-### public Yulinti.Thesaurus.ILuditorDataServanda<T>
+### public Yulinti.Thesaurus.IDataNotitia<TNotitia>
+- DataNotitiaの公開IF
+- 必要な値だけアクセス可能: `Guid`, `Revisio`, `Timestamp`, `Notitia`
+
+### public Yulinti.Thesaurus.ILuditorDataServanda<TNotitia, TData>
 
 - LuditorDataServandaの公開IF
 - メソッド:
   - `Task<Guid?> LegoNovissimus()` - 最新Revisionのguidを取得
-  - `Task<IDataServanda<T>> Arcessere(Guid guid)` - 指定guidのデータを取得
-  - `Task<Guid> CreareManualis(T dataDTO)` - 新規ファイル作成してデータ保存
-  - `Task<Guid> CreareAutomatics(T dataDTO)` - Automaticusにデータを保存
-  - `Task<Guid> Servare(Guid guid, T dataDTO)` - 既存ファイルにデータ保存
+  - `Task<IDataServanda<TData>> Arcessere(Guid guid)` - 指定guidのデータを取得
+  - `Task<IDataNotitia<TNotitia>> ArcessereNotitiam(Guid guid)` - 指定guidの軽量データを取得
+  - `Task<Guid> CreareManualis(TNotitia notitiaDTO, TData dataDTO)` - 新規ファイル作成してデータ保存
+  - `Task<Guid> CreareAutomaticus(TNotitia notitiaDTO, TData dataDTO)` - Automaticusにデータを保存
+  - `Task<Guid> Servare(Guid guid, TNotitia notitiaDTO, TData dataDTO)` - 既存ファイルにデータ保存
   - `Task Deleto(Guid guid)` - 既存ファイルを削除
   - `Task<IReadOnlyList<Guid>> TabulaManualis()`, `Task<IReadOnlyList<Guid>> TabulaAutomaticus()` - guidリスト取得
 - (注意)公開IFはSemaphoreを使いロックするため、すべてasyncとする。
@@ -106,10 +132,14 @@ JSONファイルの目次を管理する。
 
 - `novissimus`のDTO
 
-### internal Yulinti.Thesaurus.DataServanda<T>
+### internal Yulinti.Thesaurus.DataServanda<TData>
 
 - 外部に公開するデータクラス
-- パラメータ: `guid`、`DataServanda`、`T data`
+- パラメータ: `guid`、`DataServanda`、`TData data`
+
+### internal Yulinti.Thesaurus.DataNotitia<TNotitia>
+- 外部に公開する軽量データクラス
+- パラメータ: `guid`、`DataServanda`、`TNotitia notitia`
 
 ## ロジッククラス設計
 
@@ -119,15 +149,18 @@ JSONファイルの目次を管理する。
 
 - stringを受け取りファイル書き込みを行う（Async）
 - ファイルを読み込みstringを返す（Async）
+- 複数のstringを受け取りファイル書き込みを行う(Async)
+- 複数のファイルを読み込みstringを返す(Async)
 
-### internal Yulinti.Thesaurus.LuditorDataServanda<T>
+### internal Yulinti.Thesaurus.LuditorDataServanda<TNotitia, TData>
 
 DataServandaの書き込み/読み込みを行う。
 
 - コンストラクタの引数はデータディレクトリのパスのみ
 - コンストラクタでindex.jsonを読み込み、normalizeを実行（`void Normare()`）
 - 自身でIndexServandaを保持し、各関数で状態が変われば更新
-- (W)がついているメソッドはindex.jsonの更新を行う（`Task ServareIndex()`）
+- 以下のメソッドはindex.jsonの更新を行う（`Task ServareIndex()`）
+    - CreareManualis, CreareAutomaticus, Servare, Deleto
 
 ### Normare() - ノーマライズ処理
 
@@ -135,7 +168,7 @@ DataServandaの書き込み/読み込みを行う。
 - 未実装（将来のマイグレーション用）
 
 **Phase1: 不整合データの除去**
-- pathのexistsをチェック。存在しなければエントリを除去
+- path, path_notitiaのexistsをチェック。存在しなければエントリを除去
 - guidの重複をチェック。重複している場合はtimestampが古いエントリを削除
 - revisioの重複をチェック。重複している場合はtimestampが古いエントリを削除
 
@@ -147,4 +180,4 @@ DataServandaの書き込み/読み込みを行う。
 ### public static Yulinti.Thesaurus.FabricaLuditorDataServandais
 
 - ILuditorDataServandaを外から初期化するためのstaticクラス
-- メソッド: `ILuditorDataServanda<T> Fabricare<T>(string dirPath)` - LuditorDataServandaを初期化
+- メソッド: `ILuditorDataServanda<TNotitia, TData> Fabricare<TNotitia, TData>(string dirPath)` - LuditorDataServandaを初期化

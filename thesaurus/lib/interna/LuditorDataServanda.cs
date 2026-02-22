@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using System.Threading;
 
 namespace Yulinti.Thesaurus {
-    internal class LuditorDataServanda<T> : ILuditorDataServanda<T> {
+    internal class LuditorDataServanda<TNotitia, TData> : ILuditorDataServanda<TNotitia, TData> {
         private readonly string _dirPath;
         private readonly string _indexPath;
         private readonly int _longitudoAutomaticus;
@@ -63,6 +63,14 @@ namespace Yulinti.Thesaurus {
             return indexServandaDto;
         }
 
+        private bool IsValidEntry(DataServandaDto data) {
+            if (string.IsNullOrEmpty(data.Path) || string.IsNullOrEmpty(data.PathNotitia)) {
+                return false;
+            }
+            return File.Exists(Path.Combine(_dirPath, data.Path))
+                && File.Exists(Path.Combine(_dirPath, data.PathNotitia));
+        }
+
         private void Normare() {
             //Phase0: バージョンチェック/マイグレーション
             //未実装
@@ -70,7 +78,7 @@ namespace Yulinti.Thesaurus {
             //Phase1: 不整合データの除去
             //Existsチェック（削除対象を先に収集）
             var manualisDelendus = _indexServandaDto.Manualis
-                .Where(m => !File.Exists(Path.Combine(_dirPath, m.Value.Path)))
+                .Where(m => !IsValidEntry(m.Value))
                 .Select(m => m.Key)
                 .ToList();
             foreach(var key in manualisDelendus) {
@@ -78,7 +86,7 @@ namespace Yulinti.Thesaurus {
             }
 
             var automaticusDelendus = _indexServandaDto.Automaticus
-                .Where(a => !File.Exists(Path.Combine(_dirPath, a.Value.Path)))
+                .Where(a => !IsValidEntry(a.Value))
                 .Select(a => a.Key)
                 .ToList();
             foreach(var key in automaticusDelendus) {
@@ -97,12 +105,12 @@ namespace Yulinti.Thesaurus {
                 if (m.Timestamp < a.Timestamp) {
                     // DeletoDataServandaはManualis/Automaticusをまとめてやるので、ここでは使えない。
                     _indexServandaDto.Manualis.Remove(automaticus.Key);
-                    var fullPath = Path.Combine(_dirPath, m.Path);
-                    if (File.Exists(fullPath)) File.Delete(fullPath);
+                    _indexServandaDto.OrdoManualis.Remove(automaticus.Key);
+                    DeletoFiles(m);
                 } else {
                     _indexServandaDto.Automaticus.Remove(automaticus.Key);
-                    var fullPath = Path.Combine(_dirPath, a.Path);
-                    if (File.Exists(fullPath)) File.Delete(fullPath);
+                    _indexServandaDto.OrdoAutomaticus.Remove(automaticus.Key);
+                    DeletoFiles(a);
                 }
             }
 
@@ -216,10 +224,10 @@ namespace Yulinti.Thesaurus {
             }
         }
 
-        private async Task ServareIndex() {
+        private async Task ServareIndex(CancellationToken ct = default) {
             // ここでスナップショット確定
             string indexJson = JsonSerializer.Serialize(_indexServandaDto);
-            await _scriba.Scribere(_indexPath, indexJson, _tempusPraeteriit);
+            await _scriba.Scribere(_indexPath, indexJson, ct);
         }
 
         // この関数はコンストラクタ外から使うな。
@@ -228,11 +236,21 @@ namespace Yulinti.Thesaurus {
             _scriba.ScribereSync(_indexPath, indexJson);
         }
 
+        private void DeletoFiles(DataServandaDto data) {
+            if (!string.IsNullOrEmpty(data.Path)) {
+                var fullPath = Path.Combine(_dirPath, data.Path);
+                if (File.Exists(fullPath)) File.Delete(fullPath);
+            }
+            if (!string.IsNullOrEmpty(data.PathNotitia)) {
+                var fullPathNotitia = Path.Combine(_dirPath, data.PathNotitia);
+                if (File.Exists(fullPathNotitia)) File.Delete(fullPathNotitia);
+            }
+        }
+
         private void DeletoDataServandaSync(Guid guid) {
             if (_indexServandaDto.Manualis.TryGetValue(guid, out var m))
             {
-                var fullPath = Path.Combine(_dirPath, m.Path);
-                if (File.Exists(fullPath)) File.Delete(fullPath);
+                DeletoFiles(m);
                 _indexServandaDto.Manualis.Remove(guid);
                 _indexServandaDto.OrdoManualis.Remove(guid);
                 return;
@@ -240,8 +258,7 @@ namespace Yulinti.Thesaurus {
         
             if (_indexServandaDto.Automaticus.TryGetValue(guid, out var a))
             {
-                var fullPath = Path.Combine(_dirPath, a.Path);
-                if (File.Exists(fullPath)) File.Delete(fullPath);
+                DeletoFiles(a);
                 _indexServandaDto.Automaticus.Remove(guid);
                 _indexServandaDto.OrdoAutomaticus.Remove(guid);
             }
@@ -258,8 +275,8 @@ namespace Yulinti.Thesaurus {
             }
         }
 
-        public async Task<Guid?> LegoNovissimus() {
-            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS);
+        public async Task<Guid?> LegoNovissimus(CancellationToken ct = default) {
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
 
             try {
@@ -269,14 +286,17 @@ namespace Yulinti.Thesaurus {
             }
         }
 
-        public async Task<IDataServanda<T>> Arcessere(Guid guid) {
-            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS);
+        public async Task<IDataServanda<TData>> Arcessere(Guid guid, CancellationToken ct = default) {
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
 
             try {
                 Dictionary<Guid, DataServandaDto> d = SelegereDict(guid);
                 if(!d.TryGetValue(guid, out var data)) {
                     throw new FileNotFoundException($"File not found: {guid}");
+                }
+                if (string.IsNullOrEmpty(data.Path)) {
+                    throw new FileNotFoundException($"Data file not found: {guid}");
                 }
                 // データファイルパス取得
                 string path = Path.Combine(_dirPath, data.Path);
@@ -285,31 +305,64 @@ namespace Yulinti.Thesaurus {
                 // timestamp取得
                 DateTime timestamp = data.Timestamp;
                 // データファイル読み込み
-                string json = await _scriba.Legere(path, _tempusPraeteriit);
-                var dto = JsonSerializer.Deserialize<T>(json);
+                string json = await _scriba.Legere(path, ct);
+                var dto = JsonSerializer.Deserialize<TData>(json);
                 if (dto == null)
                     throw new InvalidOperationException($"Data file deserialized to null: {path}");
 
-                return new DataServanda<T>(guid, revisio, timestamp, dto);
+                return new DataServanda<TData>(guid, revisio, timestamp, dto);
             } finally {
                 _semaphoreIndexServanda.Release();
             }
         }
 
-        /// <summary>新規データ作成の共通処理。呼び出し元でセマフォ取得済みであること。dataJsonは呼び出し時点のスナップショットとしてメインスレッドで事前に作成済みであること。</summary>
-        private async Task<Guid> CreareInterna(string dataJson, bool isManualis) {
+        public async Task<IDataNotitia<TNotitia>> ArcessereNotitiam(Guid guid, CancellationToken ct = default) {
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
+            if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
+
+            try {
+                Dictionary<Guid, DataServandaDto> d = SelegereDict(guid);
+                if(!d.TryGetValue(guid, out var data)) {
+                    throw new FileNotFoundException($"File not found: {guid}");
+                }
+                if (string.IsNullOrEmpty(data.PathNotitia)) {
+                    throw new FileNotFoundException($"Notitia file not found: {guid}");
+                }
+                // メタデータファイルパス取得
+                string pathNotitia = Path.Combine(_dirPath, data.PathNotitia);
+                // revisio取得
+                long revisio = data.Revisio;
+                // timestamp取得
+                DateTime timestamp = data.Timestamp;
+                // メタデータファイル読み込み
+                string json = await _scriba.Legere(pathNotitia, ct);
+                var dto = JsonSerializer.Deserialize<TNotitia>(json);
+                if (dto == null)
+                    throw new InvalidOperationException($"Notitia file deserialized to null: {pathNotitia}");
+
+                return new DataNotitia<TNotitia>(guid, revisio, timestamp, dto);
+            } finally {
+                _semaphoreIndexServanda.Release();
+            }
+        }
+
+        /// <summary>新規データ作成の共通処理。呼び出し元でセマフォ取得済みであること。jsonは呼び出し時点のスナップショットとしてメインスレッドで事前に作成済みであること。</summary>
+        private async Task<Guid> CreareInterna(string notitiaJson, string dataJson, bool isManualis, CancellationToken ct = default) {
             Guid guid = Guid.NewGuid();
             long revisio = _indexServandaDto.RevisioProximus;
             DateTime timestamp = DateTime.UtcNow;
             string path = guid.ToString() + ".json";
+            string pathNotitia = guid.ToString() + "_n.json";
 
             string fPath = Path.Combine(_dirPath, path);
-            await _scriba.Scribere(fPath, dataJson, _tempusPraeteriit);
+            string fPathNotitia = Path.Combine(_dirPath, pathNotitia);
+            await _scriba.Scribere(new string[] { fPath, fPathNotitia }, new string[] { dataJson, notitiaJson }, ct);
 
             var dto = new DataServandaDto {
                 Revisio = revisio,
                 Timestamp = timestamp,
-                Path = path
+                Path = path,
+                PathNotitia = pathNotitia
             };
             string methodus = isManualis ? "manualis" : "automaticus";
             if (isManualis) {
@@ -339,40 +392,43 @@ namespace Yulinti.Thesaurus {
                 RotareAutomaticus();
             }
 
-            await ServareIndex();
+            await ServareIndex(ct);
             return guid;
         }
 
-        public async Task<Guid> CreareManualis(T dataDTO) {
-            // 呼び出し時点のTのスナップショットを確定するため、await前にJSON化する。
+        public async Task<Guid> CreareManualis(TNotitia notitiaDTO, TData dataDTO, CancellationToken ct = default) {
+            // 呼び出し時点のスナップショットを確定するため、await前にJSON化する。
+            string notitiaJson = JsonSerializer.Serialize(notitiaDTO);
             string dataJson = JsonSerializer.Serialize(dataDTO);
-            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS);
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
 
             try {
-                return await CreareInterna(dataJson, isManualis: true);
+                return await CreareInterna(notitiaJson, dataJson, isManualis: true, ct);
             } finally {
                 _semaphoreIndexServanda.Release();
             }
         }
 
-        public async Task<Guid> CreareAutomatics(T dataDTO) {
-            // 呼び出し時点のTのスナップショットを確定するため、await前にJSON化する。
+        public async Task<Guid> CreareAutomaticus(TNotitia notitiaDTO, TData dataDTO, CancellationToken ct = default) {
+            // 呼び出し時点のスナップショットを確定するため、await前にJSON化する。
+            string notitiaJson = JsonSerializer.Serialize(notitiaDTO);
             string dataJson = JsonSerializer.Serialize(dataDTO);
-            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS);
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
 
             try {
-                return await CreareInterna(dataJson, isManualis: false);
+                return await CreareInterna(notitiaJson, dataJson, isManualis: false, ct);
             } finally {
                 _semaphoreIndexServanda.Release();
             }
         }
 
-        public async Task<Guid> Servare(Guid guid, T dataDTO) {
-            // 呼び出し時点のTのスナップショットを確定するため、await前にJSON化する。
+        public async Task<Guid> Servare(Guid guid, TNotitia notitiaDTO, TData dataDTO, CancellationToken ct = default) {
+            // 呼び出し時点のスナップショットを確定するため、await前にJSON化する。
+            string notitiaJson = JsonSerializer.Serialize(notitiaDTO);
             string dataJson = JsonSerializer.Serialize(dataDTO);
-            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS);
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
 
             try {
@@ -383,9 +439,17 @@ namespace Yulinti.Thesaurus {
                 if(!tabla.TryGetValue(guid, out var data)) {
                     throw new FileNotFoundException($"File not found: {guid}");
                 }
+
+                if (string.IsNullOrEmpty(data.Path)) {
+                    data.Path = guid.ToString() + ".json";
+                }
+                if (string.IsNullOrEmpty(data.PathNotitia)) {
+                    data.PathNotitia = guid.ToString() + "_n.json";
+                }
     
                 string path = Path.Combine(_dirPath, data.Path);
-                await _scriba.Scribere(path, dataJson, _tempusPraeteriit);
+                string pathNotitia = Path.Combine(_dirPath, data.PathNotitia);
+                await _scriba.Scribere(new string[] { path, pathNotitia }, new string[] { dataJson, notitiaJson }, ct);
     
                 data.Revisio = _indexServandaDto.RevisioProximus;
                 data.Timestamp = DateTime.UtcNow;
@@ -414,28 +478,28 @@ namespace Yulinti.Thesaurus {
                     _indexServandaDto.Novissimus.Timestamp = data.Timestamp;
                 }
     
-                await ServareIndex();
+                await ServareIndex(ct);
                 return guid;
             } finally {
                 _semaphoreIndexServanda.Release();
             }
         }
 
-        public async Task Deleto(Guid guid) {
-            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS);
+        public async Task Deleto(Guid guid, CancellationToken ct = default) {
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
 
             try {
                 DeletoDataServandaSync(guid);
                 NormareNovissimus();
-                await ServareIndex();
+                await ServareIndex(ct);
             } finally {
                 _semaphoreIndexServanda.Release();
             }
         }
 
-        public async Task<IReadOnlyList<Guid>> TabulaManualis() {
-            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS);
+        public async Task<IReadOnlyList<Guid>> TabulaManualis(CancellationToken ct = default) {
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
 
             try {
@@ -445,8 +509,8 @@ namespace Yulinti.Thesaurus {
             }
         }
 
-        public async Task<IReadOnlyList<Guid>> TabulaAutomaticus() {
-            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS);
+        public async Task<IReadOnlyList<Guid>> TabulaAutomaticus(CancellationToken ct = default) {
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
 
             try {

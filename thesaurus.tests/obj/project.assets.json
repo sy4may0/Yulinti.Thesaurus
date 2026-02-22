@@ -936,11 +936,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/work/thesaurus.tests/thesaurus.tests.csproj",
+      "projectUniqueName": "/work/thesaurus.tests.csproj",
       "projectName": "thesaurus.tests",
-      "projectPath": "/work/thesaurus.tests/thesaurus.tests.csproj",
+      "projectPath": "/work/thesaurus.tests.csproj",
       "packagesPath": "/root/.nuget/packages/",
-      "outputPath": "/work/thesaurus.tests/obj/",
+      "outputPath": "/work/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/root/.nuget/NuGet/NuGet.Config"
@@ -955,8 +955,8 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "/work/thesaurus/thesaurus.csproj": {
-              "projectPath": "/work/thesaurus/thesaurus.csproj"
+            "/thesaurus/thesaurus.csproj": {
+              "projectPath": "/thesaurus/thesaurus.csproj"
             }
           }
         }

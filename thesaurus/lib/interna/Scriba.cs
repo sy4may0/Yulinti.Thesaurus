@@ -1,122 +1,177 @@
 using System.IO;
 using System.Text;
-using System.Threading.Tasks;
-using System.Collections.Concurrent;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Linq;
 using System;
 
 namespace Yulinti.Thesaurus {
     internal class Scriba : IScriba {
-        // pathごとのロック(インスタンス間共通)
-        private static readonly ConcurrentDictionary<string, SemaphoreSlim> _semaphores = new();
-    
-        private SemaphoreSlim LegereSem(string path)
-            => _semaphores.GetOrAdd(path, _ => new SemaphoreSlim(1, 1));
-    
-        public async Task Scribere(string path, string content, int tempusPlaeteriit = -1)
+        public async Task Scribere(string path, string content, CancellationToken ct = default)
         {
-            // pathを正規化
             path = Path.GetFullPath(path);
+            string tempPath = path + ".tmp";
 
-            var sem = LegereSem(path);
-            TimeSpan ts = Timeout.InfiniteTimeSpan;
-            if (tempusPlaeteriit >= 0) ts = TimeSpan.FromSeconds(tempusPlaeteriit);
-    
-            bool plaetereo = await sem.WaitAsync(ts).ConfigureAwait(false);
-    
-            if (!plaetereo) throw new TimeoutException($"Write lock timeout: {path}");
-    
             try
             {
                 string? directoryPath = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(directoryPath))
                     Directory.CreateDirectory(directoryPath);
-    
-                await File.WriteAllTextAsync(path, content, Encoding.UTF8).ConfigureAwait(false);
+
+                await File.WriteAllTextAsync(tempPath, content, Encoding.UTF8, ct).ConfigureAwait(false);
+                if (File.Exists(path)) File.Delete(path);
+                File.Move(tempPath, path);
             }
-            finally
-            {
-                sem.Release();
+            finally {
+                //tmpを掃除
+                try {if (File.Exists(tempPath)) File.Delete(tempPath);} catch {}
             }
         }
     
-        public async Task<string> Legere(string path, int tempusPlaeteriit = -1)
+        public async Task<string> Legere(string path, CancellationToken ct = default)
         {
-            // pathを正規化
             path = Path.GetFullPath(path);
 
             if (!File.Exists(path))
                 throw new FileNotFoundException($"File not found: {path}");
-    
-            var sem = LegereSem(path);
-    
-            TimeSpan ts = Timeout.InfiniteTimeSpan;
-            if (tempusPlaeteriit >= 0) ts = TimeSpan.FromSeconds(tempusPlaeteriit);
-            bool plaetereo = await sem.WaitAsync(ts).ConfigureAwait(false);
-    
-            if (!plaetereo) throw new TimeoutException($"Read lock timeout: {path}");
-    
-            try
-            {
-                return await File.ReadAllTextAsync(path, Encoding.UTF8).ConfigureAwait(false);
-            }
-            finally
-            {
-                sem.Release();
-            }
+
+            return await File.ReadAllTextAsync(path, Encoding.UTF8, ct).ConfigureAwait(false);
         }
     
-        public void ScribereSync(string path, string content, int tempusPlaeteriit = -1)
+        public void ScribereSync(string path, string content, CancellationToken ct = default)
         {
-            // pathを正規化
             path = Path.GetFullPath(path);
+            string tempPath = path + ".tmp";
 
-            var sem = LegereSem(path);
-    
-            TimeSpan ts = Timeout.InfiniteTimeSpan;
-            if (tempusPlaeteriit >= 0) ts = TimeSpan.FromSeconds(tempusPlaeteriit);
-            bool plaetereo = sem.Wait(ts);
-
-            if (!plaetereo) throw new TimeoutException($"Write lock timeout: {path}");
-    
             try
             {
+                ct.ThrowIfCancellationRequested();
+
                 string? directoryPath = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(directoryPath))
                     Directory.CreateDirectory(directoryPath);
-    
-                File.WriteAllText(path, content, Encoding.UTF8);
+
+                ct.ThrowIfCancellationRequested();
+                File.WriteAllText(tempPath, content, Encoding.UTF8);
+                ct.ThrowIfCancellationRequested();
+                if (File.Exists(path)) File.Delete(path);
+                File.Move(tempPath, path);
             }
-            finally
-            {
-                sem.Release();
+            finally {
+                //tmpを掛除
+                try {if (File.Exists(tempPath)) File.Delete(tempPath);} catch {}
             }
         }
     
-        public string LegereSync(string path, int tempusPlaeteriit = -1)
+        public string LegereSync(string path, CancellationToken ct = default)
         {
-            // pathを正規化
+            ct.ThrowIfCancellationRequested();
+
             path = Path.GetFullPath(path);
 
             if (!File.Exists(path))
                 throw new FileNotFoundException($"File not found: {path}");
-    
-            var sem = LegereSem(path);
-    
-            TimeSpan ts = Timeout.InfiniteTimeSpan;
-            if (tempusPlaeteriit >= 0) ts = TimeSpan.FromSeconds(tempusPlaeteriit);
-            bool plaetereo = sem.Wait(ts);
 
-            if (!plaetereo) throw new TimeoutException($"Read lock timeout: {path}");
-    
+            return File.ReadAllText(path, Encoding.UTF8);
+        }
+
+        public async Task Scribere(string[] paths, string[] contents, CancellationToken ct = default)
+        {
+            if (paths.Length != contents.Length)
+                throw new ArgumentException("paths and contents must have the same length");
+
+            string[] fullPaths = new string[paths.Length];
+            string[] tempPaths = new string[paths.Length];
+
             try
             {
-                return File.ReadAllText(path, Encoding.UTF8);
+                for (int i = 0; i < paths.Length; i++)
+                {
+                    fullPaths[i] = Path.GetFullPath(paths[i]);
+                    tempPaths[i] = fullPaths[i] + ".tmp";
+
+                    string? directoryPath = Path.GetDirectoryName(fullPaths[i]);
+                    if (!string.IsNullOrEmpty(directoryPath))
+                        Directory.CreateDirectory(directoryPath);
+
+                    await File.WriteAllTextAsync(tempPaths[i], contents[i], Encoding.UTF8, ct).ConfigureAwait(false);
+                }
+
+                for (int i = 0; i < fullPaths.Length; i++)
+                {
+                    if (File.Exists(fullPaths[i])) File.Delete(fullPaths[i]);
+                    File.Move(tempPaths[i], fullPaths[i]);
+                }
             }
-            finally
+            finally {
+                //tmpを掃除
+                foreach (var tempPath in tempPaths) {
+                    try {
+                        if (!string.IsNullOrEmpty(tempPath) && File.Exists(tempPath)) File.Delete(tempPath);
+                    } catch {}
+                }
+            }
+        }
+
+        public async Task<string[]> Legere(string[] paths, CancellationToken ct = default)
+        {
+            string[] results = new string[paths.Length];
+            for (int i = 0; i < paths.Length; i++)
             {
-                sem.Release();
+                results[i] = await Legere(paths[i], ct).ConfigureAwait(false);
             }
+            return results;
+        }
+
+        public void ScribereSync(string[] paths, string[] contents, CancellationToken ct = default)
+        {
+            if (paths.Length != contents.Length)
+                throw new ArgumentException("paths and contents must have the same length");
+
+            string[] fullPaths = new string[paths.Length];
+            string[] tempPaths = new string[paths.Length];
+
+            try
+            {
+                for (int i = 0; i < paths.Length; i++)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    fullPaths[i] = Path.GetFullPath(paths[i]);
+                    tempPaths[i] = fullPaths[i] + ".tmp";
+
+                    string? directoryPath = Path.GetDirectoryName(fullPaths[i]);
+                    if (!string.IsNullOrEmpty(directoryPath))
+                        Directory.CreateDirectory(directoryPath);
+
+                    File.WriteAllText(tempPaths[i], contents[i], Encoding.UTF8);
+                }
+
+                for (int i = 0; i < fullPaths.Length; i++)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (File.Exists(fullPaths[i])) File.Delete(fullPaths[i]);
+                    File.Move(tempPaths[i], fullPaths[i]);
+                }
+            }
+            finally {
+                //tmpを掃除
+                foreach (var tempPath in tempPaths) {
+                    try {
+                        if (!string.IsNullOrEmpty(tempPath) && File.Exists(tempPath)) File.Delete(tempPath);
+                    } catch {}
+                }
+            }
+        }
+
+        public string[] LegereSync(string[] paths, CancellationToken ct = default)
+        {
+            string[] results = new string[paths.Length];
+            for (int i = 0; i < paths.Length; i++)
+            {
+                results[i] = LegereSync(paths[i], ct);
+            }
+            return results;
         }
     }
 }

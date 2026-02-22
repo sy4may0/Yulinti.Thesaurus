@@ -369,11 +369,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/work/thesaurus/thesaurus.csproj",
+      "projectUniqueName": "/thesaurus/thesaurus.csproj",
       "projectName": "thesaurus",
-      "projectPath": "/work/thesaurus/thesaurus.csproj",
+      "projectPath": "/thesaurus/thesaurus.csproj",
       "packagesPath": "/root/.nuget/packages/",
-      "outputPath": "/work/thesaurus/obj/",
+      "outputPath": "/thesaurus/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/root/.nuget/NuGet/NuGet.Config"
