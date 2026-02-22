@@ -3,12 +3,12 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Xunit;
 using Yulinti.Thesaurus;
 using System.Threading;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 public class LuditorDataServandaTests
 {
@@ -130,55 +130,55 @@ public class LuditorDataServandaTests
 
     private sealed class IndexServandaDtoLike
     {
-        [JsonPropertyName("revisio_proximus")]
+        [JsonProperty("revisio_proximus")]
         public long RevisioProximus { get; set; }
 
-        [JsonPropertyName("versio")]
+        [JsonProperty("versio")]
         public int Versio { get; set; }
 
-        [JsonPropertyName("manualis")]
+        [JsonProperty("manualis")]
         public Dictionary<Guid, DataServandaDtoLike> Manualis { get; set; } = new Dictionary<Guid, DataServandaDtoLike>();
 
-        [JsonPropertyName("ordo_manualis")]
+        [JsonProperty("ordo_manualis")]
         public List<Guid> OrdoManualis { get; set; } = new List<Guid>();
 
-        [JsonPropertyName("automaticus")]
+        [JsonProperty("automaticus")]
         public Dictionary<Guid, DataServandaDtoLike> Automaticus { get; set; } = new Dictionary<Guid, DataServandaDtoLike>();
 
-        [JsonPropertyName("ordo_automaticus")]
+        [JsonProperty("ordo_automaticus")]
         public List<Guid> OrdoAutomaticus { get; set; } = new List<Guid>();
 
-        [JsonPropertyName("novissimus")]
+        [JsonProperty("novissimus")]
         public NovissimusServandaDtoLike? Novissimus { get; set; }
     }
 
     private sealed class DataServandaDtoLike
     {
-        [JsonPropertyName("revisio")]
+        [JsonProperty("revisio")]
         public long Revisio { get; set; }
 
-        [JsonPropertyName("timestamp")]
+        [JsonProperty("timestamp")]
         public DateTime Timestamp { get; set; }
 
-        [JsonPropertyName("path")]
+        [JsonProperty("path")]
         public string Path { get; set; } = string.Empty;
 
-        [JsonPropertyName("path_notitia")]
+        [JsonProperty("path_notitia")]
         public string PathNotitia { get; set; } = string.Empty;
     }
 
     private sealed class NovissimusServandaDtoLike
     {
-        [JsonPropertyName("methodus")]
+        [JsonProperty("methodus")]
         public string Methodus { get; set; } = string.Empty;
 
-        [JsonPropertyName("guid")]
+        [JsonProperty("guid")]
         public Guid Guid { get; set; }
 
-        [JsonPropertyName("revisio")]
+        [JsonProperty("revisio")]
         public long Revisio { get; set; }
 
-        [JsonPropertyName("timestamp")]
+        [JsonProperty("timestamp")]
         public DateTime Timestamp { get; set; }
     }
 
@@ -188,7 +188,7 @@ public class LuditorDataServandaTests
     private static void WriteIndex(string dirPath, IndexServandaDtoLike dto)
     {
         string indexPath = System.IO.Path.Combine(dirPath, "index.json");
-        string json = JsonSerializer.Serialize(dto);
+        string json = JsonConvert.SerializeObject(dto);
         File.WriteAllText(indexPath, json, Encoding.UTF8);
     }
 
@@ -197,7 +197,7 @@ public class LuditorDataServandaTests
         string fullPath = System.IO.Path.Combine(dirPath, relativePath);
         string? dir = System.IO.Path.GetDirectoryName(fullPath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-        File.WriteAllText(fullPath, JsonSerializer.Serialize(dto), Encoding.UTF8);
+        File.WriteAllText(fullPath, JsonConvert.SerializeObject(dto), Encoding.UTF8);
     }
 
     [Fact]
@@ -210,15 +210,14 @@ public class LuditorDataServandaTests
         string indexPath = System.IO.Path.Combine(temp.Path, "index.json");
         Assert.True(File.Exists(indexPath));
 
-        using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(indexPath, Encoding.UTF8));
-        var root = doc.RootElement;
-        Assert.Equal(0, root.GetProperty("revisio_proximus").GetInt64());
-        Assert.Equal(0, root.GetProperty("versio").GetInt32());
-        Assert.False(root.GetProperty("manualis").EnumerateObject().Any());
-        Assert.Equal(0, root.GetProperty("ordo_manualis").GetArrayLength());
-        Assert.False(root.GetProperty("automaticus").EnumerateObject().Any());
-        Assert.Equal(0, root.GetProperty("ordo_automaticus").GetArrayLength());
-        Assert.Equal(JsonValueKind.Null, root.GetProperty("novissimus").ValueKind);
+        JObject root = JObject.Parse(File.ReadAllText(indexPath, Encoding.UTF8));
+        Assert.Equal(0, (long)root["revisio_proximus"]);
+        Assert.Equal(0, (int)root["versio"]);
+        Assert.False(((JObject)root["manualis"]).Properties().Any());
+        Assert.Equal(0, ((JArray)root["ordo_manualis"]).Count);
+        Assert.False(((JObject)root["automaticus"]).Properties().Any());
+        Assert.Equal(0, ((JArray)root["ordo_automaticus"]).Count);
+        Assert.Equal(JTokenType.Null, root["novissimus"].Type);
     }
 
     [Fact]
@@ -241,7 +240,7 @@ public class LuditorDataServandaTests
         string indexPath = System.IO.Path.Combine(temp.Path, "index.json");
         File.WriteAllText(indexPath, "{ not json", Encoding.UTF8);
 
-        Assert.Throws<JsonException>(() => FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path));
+        Assert.Throws<JsonReaderException>(() => FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path));
     }
 
     [Fact]

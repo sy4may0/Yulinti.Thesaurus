@@ -1,29 +1,29 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 
 namespace Yulinti.Thesaurus {
     internal class IndexServandaDto {
-        [JsonPropertyName("revisio_proximus")]
+        [JsonProperty("revisio_proximus")]
         public long RevisioProximus { get; set; }
         
-        [JsonPropertyName("versio")]
+        [JsonProperty("versio")]
         public int Versio { get; set; }
         
-        [JsonPropertyName("manualis")]
+        [JsonProperty("manualis")]
         public Dictionary<Guid, DataServandaDto> Manualis { get; set; } = null!;
         
-        [JsonPropertyName("ordo_manualis")]
+        [JsonProperty("ordo_manualis")]
         public List<Guid> OrdoManualis { get; set; } = null!;
         
-        [JsonPropertyName("automaticus")]
+        [JsonProperty("automaticus")]
         public Dictionary<Guid, DataServandaDto> Automaticus { get; set; } = null!;
         
-        [JsonPropertyName("ordo_automaticus")]
+        [JsonProperty("ordo_automaticus")]
         public List<Guid> OrdoAutomaticus { get; set; } = null!;
         
-        [JsonPropertyName("novissimus")]
+        [JsonProperty("novissimus")]
         public NovissimusServandaDto? Novissimus { get; set; }
 
         public IndexServandaDto() {
@@ -38,30 +38,30 @@ namespace Yulinti.Thesaurus {
     }
 
     internal class DataServandaDto {
-        [JsonPropertyName("revisio")]
+        [JsonProperty("revisio")]
         public long Revisio { get; set; }
         
-        [JsonPropertyName("timestamp")]
+        [JsonProperty("timestamp")]
         public DateTime Timestamp { get; set; }
         
-        [JsonPropertyName("path")]
+        [JsonProperty("path")]
         public string Path { get; set; } = null!;
 
-        [JsonPropertyName("path_notitia")]
+        [JsonProperty("path_notitia")]
         public string PathNotitia { get; set; } = null!;
     }
 
     internal class NovissimusServandaDto {
-        [JsonPropertyName("methodus")]
+        [JsonProperty("methodus")]
         public string Methodus { get; set; } = null!;
         
-        [JsonPropertyName("guid")]
+        [JsonProperty("guid")]
         public Guid Guid { get; set; }
         
-        [JsonPropertyName("revisio")]
+        [JsonProperty("revisio")]
         public long Revisio { get; set; }
         
-        [JsonPropertyName("timestamp")]
+        [JsonProperty("timestamp")]
         public DateTime Timestamp { get; set; }
     }
 }

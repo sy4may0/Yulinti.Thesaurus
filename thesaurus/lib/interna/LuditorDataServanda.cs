@@ -1,10 +1,10 @@
 using System.IO;
-using System.Text.Json;
 using System.Linq;
 using System.Collections.Generic;
 using System;
 using System.Threading.Tasks;
 using System.Threading;
+using Newtonsoft.Json;
 
 namespace Yulinti.Thesaurus {
     internal class LuditorDataServanda<TNotitia, TData> : ILuditorDataServanda<TNotitia, TData> {
@@ -53,13 +53,13 @@ namespace Yulinti.Thesaurus {
             //ファイルが存在する場合はScribaでロードする。
             if(File.Exists(_indexPath)) {
                 string indexJson = _scriba.LegereSync(_indexPath);
-                var dto = JsonSerializer.Deserialize<IndexServandaDto>(indexJson);
+                var dto = JsonConvert.DeserializeObject<IndexServandaDto>(indexJson);
                 return dto ?? throw new InvalidOperationException("index.json could not be deserialized.");
             }
 
             // 無い場合は新規作成する。
             IndexServandaDto indexServandaDto = new IndexServandaDto();
-            _scriba.ScribereSync(_indexPath, JsonSerializer.Serialize(indexServandaDto));
+            _scriba.ScribereSync(_indexPath, JsonConvert.SerializeObject(indexServandaDto));
             return indexServandaDto;
         }
 
@@ -226,13 +226,13 @@ namespace Yulinti.Thesaurus {
 
         private async Task ServareIndex(CancellationToken ct = default) {
             // ここでスナップショット確定
-            string indexJson = JsonSerializer.Serialize(_indexServandaDto);
+            string indexJson = JsonConvert.SerializeObject(_indexServandaDto);
             await _scriba.Scribere(_indexPath, indexJson, ct);
         }
 
         // この関数はコンストラクタ外から使うな。
         private void ServareIndexSync() {
-            string indexJson = JsonSerializer.Serialize(_indexServandaDto);
+            string indexJson = JsonConvert.SerializeObject(_indexServandaDto);
             _scriba.ScribereSync(_indexPath, indexJson);
         }
 
@@ -306,7 +306,7 @@ namespace Yulinti.Thesaurus {
                 DateTime timestamp = data.Timestamp;
                 // データファイル読み込み
                 string json = await _scriba.Legere(path, ct);
-                var dto = JsonSerializer.Deserialize<TData>(json);
+                var dto = JsonConvert.DeserializeObject<TData>(json);
                 if (dto == null)
                     throw new InvalidOperationException($"Data file deserialized to null: {path}");
 
@@ -336,7 +336,7 @@ namespace Yulinti.Thesaurus {
                 DateTime timestamp = data.Timestamp;
                 // メタデータファイル読み込み
                 string json = await _scriba.Legere(pathNotitia, ct);
-                var dto = JsonSerializer.Deserialize<TNotitia>(json);
+                var dto = JsonConvert.DeserializeObject<TNotitia>(json);
                 if (dto == null)
                     throw new InvalidOperationException($"Notitia file deserialized to null: {pathNotitia}");
 
@@ -398,8 +398,8 @@ namespace Yulinti.Thesaurus {
 
         public async Task<Guid> CreareManualis(TNotitia notitiaDTO, TData dataDTO, CancellationToken ct = default) {
             // 呼び出し時点のスナップショットを確定するため、await前にJSON化する。
-            string notitiaJson = JsonSerializer.Serialize(notitiaDTO);
-            string dataJson = JsonSerializer.Serialize(dataDTO);
+            string notitiaJson = JsonConvert.SerializeObject(notitiaDTO);
+            string dataJson = JsonConvert.SerializeObject(dataDTO);
             bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
 
@@ -412,8 +412,8 @@ namespace Yulinti.Thesaurus {
 
         public async Task<Guid> CreareAutomaticus(TNotitia notitiaDTO, TData dataDTO, CancellationToken ct = default) {
             // 呼び出し時点のスナップショットを確定するため、await前にJSON化する。
-            string notitiaJson = JsonSerializer.Serialize(notitiaDTO);
-            string dataJson = JsonSerializer.Serialize(dataDTO);
+            string notitiaJson = JsonConvert.SerializeObject(notitiaDTO);
+            string dataJson = JsonConvert.SerializeObject(dataDTO);
             bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
 
@@ -426,8 +426,8 @@ namespace Yulinti.Thesaurus {
 
         public async Task<Guid> Servare(Guid guid, TNotitia notitiaDTO, TData dataDTO, CancellationToken ct = default) {
             // 呼び出し時点のスナップショットを確定するため、await前にJSON化する。
-            string notitiaJson = JsonSerializer.Serialize(notitiaDTO);
-            string dataJson = JsonSerializer.Serialize(dataDTO);
+            string notitiaJson = JsonConvert.SerializeObject(notitiaDTO);
+            string dataJson = JsonConvert.SerializeObject(dataDTO);
             bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
 

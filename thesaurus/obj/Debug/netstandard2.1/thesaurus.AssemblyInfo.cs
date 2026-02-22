@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("thesaurus")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8bb30c0f3563775cd765e535bc473ff1a5173856")]
 [assembly: System.Reflection.AssemblyProductAttribute("thesaurus")]
 [assembly: System.Reflection.AssemblyTitleAttribute("thesaurus")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
