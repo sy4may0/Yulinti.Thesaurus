@@ -161,7 +161,7 @@ Unity の Package Manager は、Git の URL を指定してパッケージを追
 ```json
 {
   "dependencies": {
-    "com.yulinti.thesaurus": "https://github.com/sy4may0/thesaurus.git?path=/thesaurus"
+    "com.yulinti.thesaurus": "https://github.com/sy4may0/Yulinti.Thesaurus.git?path=/thesaurus"
   }
 }
 ```
