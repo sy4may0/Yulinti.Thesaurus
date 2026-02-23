@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 
 namespace Yulinti.Thesaurus {
     public interface ILuditorDataServanda<TNotitia, TData> {
+        Task<int> LongitudoManualis(CancellationToken ct = default);
+        Task<int> LongitudoAutomaticus(CancellationToken ct = default);
+        Task<bool> EstNovissimus(CancellationToken ct = default);
         Task<Guid?> LegoNovissimus(CancellationToken ct = default);
         Task<IDataServanda<TData>> Arcessere(Guid guid, CancellationToken ct = default);
         Task<IDataNotitia<TNotitia>> ArcessereNotitiam(Guid guid, CancellationToken ct = default);

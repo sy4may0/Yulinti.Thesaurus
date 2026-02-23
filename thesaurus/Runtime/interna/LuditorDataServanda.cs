@@ -275,6 +275,39 @@ namespace Yulinti.Thesaurus {
             }
         }
 
+        public async Task<int> LongitudoManualis(CancellationToken ct = default) {
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
+            if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
+
+            try {
+                return _indexServandaDto.Manualis.Count;
+            } finally {
+                _semaphoreIndexServanda.Release();
+            }
+        }
+
+        public async Task<int> LongitudoAutomaticus(CancellationToken ct = default) {
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
+            if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
+
+            try {
+                return _indexServandaDto.Automaticus.Count;
+            } finally {
+                _semaphoreIndexServanda.Release();
+            }
+        }
+
+        public async Task<bool> EstNovissimus(CancellationToken ct = default) {
+            bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
+            if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");
+
+            try {
+                return _indexServandaDto.Novissimus != null;
+            } finally {
+                _semaphoreIndexServanda.Release();
+            }
+        }
+
         public async Task<Guid?> LegoNovissimus(CancellationToken ct = default) {
             bool praeteriit = await _semaphoreIndexServanda.WaitAsync(_tempusPraeteriitTS, ct);
             if (!praeteriit) throw new TimeoutException("IndexServanda lock timeout.");

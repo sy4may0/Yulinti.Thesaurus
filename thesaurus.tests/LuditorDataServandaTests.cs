@@ -496,4 +496,57 @@ public class LuditorDataServandaTests
         Assert.Equal(7, notitia.Notitia.Rank);
         Assert.Equal("title-7", notitia.Notitia.Title);
     }
+
+    [Fact]
+    public async Task Longitudo_InitialState_ReturnsZero()
+    {
+        using var temp = new TempDir();
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
+
+        int longitudoManualis = await sut.LongitudoManualis();
+        int longitudoAutomaticus = await sut.LongitudoAutomaticus();
+
+        Assert.Equal(0, longitudoManualis);
+        Assert.Equal(0, longitudoAutomaticus);
+    }
+
+    [Fact]
+    public async Task Longitudo_AfterAddingData_ReturnsCorrectCounts()
+    {
+        using var temp = new TempDir();
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
+
+        await sut.CreareManualis(MakeNotitia(1), MakeData(1));
+        await sut.CreareManualis(MakeNotitia(2), MakeData(2));
+        await sut.CreareAutomaticus(MakeNotitia(3), MakeData(3));
+
+        int longitudoManualis = await sut.LongitudoManualis();
+        int longitudoAutomaticus = await sut.LongitudoAutomaticus();
+
+        Assert.Equal(2, longitudoManualis);
+        Assert.Equal(1, longitudoAutomaticus);
+    }
+
+    [Fact]
+    public async Task EstNovissimus_InitialState_ReturnsFalse()
+    {
+        using var temp = new TempDir();
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
+
+        bool estNovissimus = await sut.EstNovissimus();
+
+        Assert.False(estNovissimus);
+    }
+
+    [Fact]
+    public async Task EstNovissimus_AfterAddingData_ReturnsTrue()
+    {
+        using var temp = new TempDir();
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
+
+        await sut.CreareManualis(MakeNotitia(1), MakeData(1));
+        bool estNovissimus = await sut.EstNovissimus();
+
+        Assert.True(estNovissimus);
+    }
 }
