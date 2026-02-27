@@ -483,6 +483,52 @@ public class LuditorDataServandaTests
     }
 
     [Fact]
+    public async Task Deleto_Manualis_RemovesOnlyTargetFromTabulaManualis()
+    {
+        using var temp = new TempDir();
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
+
+        Guid guidManualA = await sut.CreareManualis(MakeNotitia(1), MakeData(1));
+        Guid guidManualB = await sut.CreareManualis(MakeNotitia(2), MakeData(2));
+        Guid guidAuto = await sut.CreareAutomaticus(MakeNotitia(3), MakeData(3));
+
+        await sut.Deleto(guidManualA);
+
+        var manualis = await sut.TabulaManualis();
+        var automaticus = await sut.TabulaAutomaticus();
+
+        Assert.Single(manualis);
+        Assert.DoesNotContain(guidManualA, manualis);
+        Assert.Contains(guidManualB, manualis);
+
+        Assert.Single(automaticus);
+        Assert.Contains(guidAuto, automaticus);
+    }
+
+    [Fact]
+    public async Task Deleto_Automaticus_RemovesOnlyTargetFromTabulaAutomaticus()
+    {
+        using var temp = new TempDir();
+        var sut = FabricaLuditorDataServanda.Creare<TestNotitiaDto, TestDataDto>(temp.Path);
+
+        Guid guidAutoA = await sut.CreareAutomaticus(MakeNotitia(1), MakeData(1));
+        Guid guidAutoB = await sut.CreareAutomaticus(MakeNotitia(2), MakeData(2));
+        Guid guidManual = await sut.CreareManualis(MakeNotitia(3), MakeData(3));
+
+        await sut.Deleto(guidAutoA);
+
+        var automaticus = await sut.TabulaAutomaticus();
+        var manualis = await sut.TabulaManualis();
+
+        Assert.Single(automaticus);
+        Assert.DoesNotContain(guidAutoA, automaticus);
+        Assert.Contains(guidAutoB, automaticus);
+
+        Assert.Single(manualis);
+        Assert.Contains(guidManual, manualis);
+    }
+
+    [Fact]
     public async Task ArcessereNotitiam_ReturnsNotitiaData()
     {
         using var temp = new TempDir();
